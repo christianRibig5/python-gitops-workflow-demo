@@ -54,7 +54,12 @@ jobs:
           push: true
           tags: conyeukwu25/gitops-demo:${{ steps.vars.outputs.short_sha }}
 
-        - name: Update Kubernetes Image tags
+      - name: Update Kubernetes Image tags
+          shell: bash
+          run: | 
+            sed -i "s|image: conyeukwu25/gitops-demo:${{ steps.vars.outputs.short_sha}}|" k8s/deployment.yaml
+
+      - name: Commit updated deployment
           shell: bash
           run: |
             if git diff --quiet -- k8s/deployment.yaml; then
