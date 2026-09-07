@@ -3,20 +3,27 @@ kind: Deployment
 metadata:
   name: gitops-demo
   labels:
-    app: gitopsci
+    app.kubernetes.io/name: gitopsdemo
+
 spec:
   replicas: 3
+
   selector:
     matchLabels:
-      app: gitopsdemo
+      app.kubernetes.io/name: gitopsdemo
+
   template:
     metadata:
       labels:
-        app: gitopsdemo
+        app.kubernetes.io/name: gitopsdemo
+
     spec:
       containers:
       - name: gitopsdemo
-        image: conyeukwu25/gitops-demo
+        image: conyeukwu25/gitops-demo:
+        imagePullPolicy: IfNotPresent
+
         ports:
-        - containerPort: 80
-          targetPort: http-web-svc
+        - name: http
+          containerPort: 80
+          protocol: TCP

@@ -2,11 +2,16 @@ apiVersion: v1
 kind: Service
 metadata:
   name: gitopsdemo-service
+
 spec:
+  type: ClusterIP
+
   selector:
+    matchLabels:
     app.kubernetes.io/name: gitopsdemo
+  
   ports:
   - name: gitopsdemo
     protocol: TCP
     port: 80
-    targetPort: http-web-svc
+    targetPort: http
