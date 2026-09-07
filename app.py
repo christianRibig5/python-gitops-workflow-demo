@@ -5,13 +5,13 @@ app = Flask(__name__)
 @app.route("/")
 def home():
     return {
-        "message":"Hello from Python GitOps!"
+        "message":"Hello from Python GitOps!🚀 "
     }
 
 @app.route("/health")
 def health():
     return{
-        "status":"healthy"
+        "status":"healthy🧑‍⚕️"
     }
 
 if __name__ == "__main__":
