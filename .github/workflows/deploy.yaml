@@ -1,5 +1,5 @@
 name: GitOps CI
-on: 
+on:
   push:
     branches:
       - main
@@ -9,11 +9,10 @@ on:
 permissions:
   contents: write
 
-
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v7
@@ -43,10 +42,10 @@ jobs:
         id: vars
         shell: bash
         run: echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
-      
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
-      
+
       - name: Build and push multi-architecture image
         uses: docker/build-push-action@v7
         with:
@@ -54,9 +53,19 @@ jobs:
           push: true
           tags: conyeukwu25/gitops-demo:${{ steps.vars.outputs.short_sha }}
 
+      - name: Scan Docker image with Trivy
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: conyeukwu25/gitops-demo:${{ steps.vars.outputs.short_sha }}
+          format: table
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
       - name: Update Kubernetes Image tags
         shell: bash
-        run: | 
+        run: |
           sed -i "s|image: conyeukwu25/gitops-demo:.*|image: conyeukwu25/gitops-demo:${{ steps.vars.outputs.short_sha }}|" k8s/deployment.yaml
 
       - name: Commit updated deployment
@@ -72,4 +81,3 @@ jobs:
           git add k8s/deployment.yaml
           git commit -m"Update image to ${{ steps.vars.outputs.short_sha }} [skip ci]"
           git push
-
