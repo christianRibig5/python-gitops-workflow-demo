@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gitops-demo
+  labels:
+    app: gitopsci
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: gitopsdemo
+  template:
+    metadata:
+      labels:
+        app: gitopsdemo
+    spec:
+      containers:
+      - name: gitopsdemo
+        image: conyeukwu25/gitops-demo
+        ports:
+        - containerPort: 80
+          targetPort: http-web-svc
