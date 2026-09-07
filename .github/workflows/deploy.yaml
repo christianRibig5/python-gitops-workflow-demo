@@ -52,7 +52,7 @@ jobs:
         with:
           content: .
           push: true
-          tags:conyeukwu25/gitops-demo:${{ steps.vars.outputs.short_sha }}
+          tags: conyeukwu25/gitops-demo:${{ steps.vars.outputs.short_sha }}
 
         - name: Update Kubernetes Image tags
           shell: bash
