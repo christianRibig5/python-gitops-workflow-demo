@@ -19,20 +19,19 @@ spec:
 
     spec:
       containers:
-      - name: gitopsdemo
-        image: conyeukwu25/gitops-demo:25540ff
-        imagePullPolicy: IfNotPresent
+        - name: gitopsdemo
+          image: conyeukwu25/gitops-demo:25540ff
+          imagePullPolicy: IfNotPresent
 
-        ports:
-        - name: http
-          containerPort: 80
-          protocol: TCP
+          ports:
+            - name: http
+              containerPort: 5000
+              protocol: TCP
 
-        resources:
-          requests:
-            cpu: 100m
-            memory: 128Mi
-          limits: 
-            cpu: 500m
-            memory: 256Mi
-        
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi

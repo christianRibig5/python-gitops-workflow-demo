@@ -7,11 +7,10 @@ spec:
   type: ClusterIP
 
   selector:
-    matchLabels:
     app.kubernetes.io/name: gitopsdemo
-  
+
   ports:
-  - name: gitopsdemo
-    protocol: TCP
-    port: 80
-    targetPort: http
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: http
