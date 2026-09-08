@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
         - name: gitopsdemo
-          image: conyeukwu25/gitops-demo:25540ff
+          image: conyeukwu25/gitops-demo:bbe2261
           imagePullPolicy: IfNotPresent
 
           ports:
