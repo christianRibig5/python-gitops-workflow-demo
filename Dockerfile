@@ -29,10 +29,12 @@ WORKDIR /app
 
 COPY --from=build /dependencies /usr/local
 
-# Upgrade after dependencies to fix the trivy vunerability validation
+# Upgrade packaging tools and their bundled dependencies
 RUN python -m pip install \
     --no-cache-dir \
-    --upgrade "wheel>=0.46.2"
+    --upgrade \
+    "setuptools==84.0.0" \
+    "wheel==0.48.0"
 
 COPY . .
 
