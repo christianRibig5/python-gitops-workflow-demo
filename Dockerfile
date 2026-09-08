@@ -28,6 +28,12 @@ FROM python:3.11.16-slim-trixie AS runtime
 WORKDIR /app
 
 COPY --from=build /dependencies /usr/local
+
+# Upgrade after dependencies to fix the trivy vunerability validation
+RUN python -m pip install \
+    --no-cache-dir \
+    --upgrade "wheel>=0.46.2"
+
 COPY . .
 
 EXPOSE 5000
