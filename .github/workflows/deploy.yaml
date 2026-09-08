@@ -1,4 +1,4 @@
-name: GitOps CI
+name: Build, Scan and Deploy
 on:
   push:
     branches:
@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   build:
@@ -26,7 +27,7 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Checkout python application
+      - name: Validate python syntax
         run: python -m py_compile app.py
 
       - name: Login to docker Hub
@@ -81,3 +82,50 @@ jobs:
           git add k8s/deployment.yaml
           git commit -m"Update image to ${{ steps.vars.outputs.short_sha }} [skip ci]"
           git push
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout updated deployment
+        uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.2.4
+        with:
+          role-to-assume: ${{ secrets.AWS_GITHUB_ROLE_ARN }}
+          aws-region: ca-central-1
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: latest
+
+      - name: Connect to EKS cluster
+        run: |
+          aws eks update-kubeconfig \
+            --region ca-central-1 \
+            --name retail-dev-eksjalexsol
+
+      - name: Verify kuberbetes access
+        run: |
+          kubectl auth can-i create deployments --namespace default
+          kubectl get pods --namespace default
+
+      - name: Deploy application
+        run: |
+          kubectl apply -f k8s/
+
+      - name: Wait for deployment
+        run: |
+          kubectl rollout status deployment/gitops-demo \
+            --namespace default \
+            --timeout=180s
+
+      - name: Display application resources
+        run: |
+          kubectl get pods,services \
+            --namespace default
