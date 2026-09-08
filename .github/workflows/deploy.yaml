@@ -62,7 +62,7 @@ jobs:
       - name: Scan Docker image with Trivy
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: conyeukwu25/gitops-demo:${{ steps.vars.outputs.short_sha }}
+          image-ref: conyeukwu25/gitops-demo:${{ needs.build.outputs.image_tag }}
           format: table
           vuln-type: os,library
           severity: CRITICAL,HIGH
@@ -70,14 +70,14 @@ jobs:
           exit-code: "1"
 
   update-manifest:
-    needs: scan
+    needs: [build, scan]
     runs-on: ubuntu-latest
 
     steps:
       - name: Update Kubernetes Image tags
         shell: bash
         run: |
-          sed -i "s|image: conyeukwu25/gitops-demo:.*|image: conyeukwu25/gitops-demo:${{ steps.vars.outputs.short_sha }}|" k8s/deployment.yaml
+          sed -i "s|image: conyeukwu25/gitops-demo:.*|image: conyeukwu25/gitops-demo:${{ needs.build.outputs.image_tag }}|" k8s/deployment.yaml
 
       - name: Commit updated deployment
         shell: bash
