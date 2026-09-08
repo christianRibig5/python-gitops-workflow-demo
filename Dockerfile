@@ -10,7 +10,7 @@
 #Multi stage Build
 #Stage 1: Build dependencies
 
-FROM python:3.11-slim AS build
+FROM python:3.11.16-slim-trixie AS build
 
 WORKDIR /app
 
@@ -22,10 +22,8 @@ RUN pip install --no-cache-dir \
 
 #Stage 2: Runtime Image
 
-FROM python:3.11-slim AS runtime
+FROM python:3.11.16-slim-trixie AS runtime
 
-# Fix CVE-2026-24049 in the runtime image
-RUN python -m pip install --no-cache-dir --upgrade "wheel>=0.46.2"
 
 WORKDIR /app
 
