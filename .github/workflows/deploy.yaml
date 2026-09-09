@@ -109,85 +109,85 @@ jobs:
           git commit -m"Update image to ${{ needs.build.outputs.image_tag }} [skip ci]"
           git push
 
-  deploy:
-    needs: update-manifest
-    runs-on: ubuntu-latest
+  # deploy:
+  #   needs: update-manifest
+  #   runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout updated deployment
-        uses: actions/checkout@v7
-        with:
-          ref: main
+  #   steps:
+  #     - name: Checkout updated deployment
+  #       uses: actions/checkout@v7
+  #       with:
+  #         ref: main
 
-      - name: Show GitHub OIDC identity
-        run: |
-          echo "Repository: ${{ github.repository }}"
-          echo "Branch reference: ${{ github.ref }}"
+  #     - name: Show GitHub OIDC identity
+  #       run: |
+  #         echo "Repository: ${{ github.repository }}"
+  #         echo "Branch reference: ${{ github.ref }}"
 
-      - name: Display actual OIDC claims
-        shell: bash
-        run: |
-          OIDC_RESPONSE=$(curl --fail --silent --show-error \
-            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com")
+  #     - name: Display actual OIDC claims
+  #       shell: bash
+  #       run: |
+  #         OIDC_RESPONSE=$(curl --fail --silent --show-error \
+  #           -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+  #           "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com")
 
-          OIDC_TOKEN=$(echo "$OIDC_RESPONSE" | jq -r '.value')
-          export OIDC_TOKEN
+  #         OIDC_TOKEN=$(echo "$OIDC_RESPONSE" | jq -r '.value')
+  #         export OIDC_TOKEN
 
-          python3 <<'PY'
-          import os
-          import json
-          import base64
+  #         python3 <<'PY'
+  #         import os
+  #         import json
+  #         import base64
 
-          token = os.environ["OIDC_TOKEN"]
-          payload = token.split(".")[1]
-          payload += "=" * (-len(payload) % 4)
-          claims = json.loads(base64.urlsafe_b64decode(payload))
+  #         token = os.environ["OIDC_TOKEN"]
+  #         payload = token.split(".")[1]
+  #         payload += "=" * (-len(payload) % 4)
+  #         claims = json.loads(base64.urlsafe_b64decode(payload))
 
-          for key in ("iss", "aud", "sub", "repository", "ref"):
-            print(f"{key}: {claims.get(key)}")
-          PY
+  #         for key in ("iss", "aud", "sub", "repository", "ref"):
+  #           print(f"{key}: {claims.get(key)}")
+  #         PY
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v6.2.4
-        with:
-          # role-to-assume: arn:aws:iam::247332613204:role/python-gitops-eks-deploy-role
-          role-to-assume: ${{ secrets.AWS_GITHUB_ROLE_ARN }}
-          role-session-name: GitHubActionsWorkflowSession
-          aws-region: ca-central-1
-          retry-max-attempts: 3
+  #     - name: Configure AWS credentials
+  #       uses: aws-actions/configure-aws-credentials@v6.2.4
+  #       with:
+  #         # role-to-assume: arn:aws:iam::247332613204:role/python-gitops-eks-deploy-role
+  #         role-to-assume: ${{ secrets.AWS_GITHUB_ROLE_ARN }}
+  #         role-session-name: GitHubActionsWorkflowSession
+  #         aws-region: ca-central-1
+  #         retry-max-attempts: 3
 
-      - name: Verify AWS Authentication
-        run: |
-          aws sts get-caller-identity
+  #     - name: Verify AWS Authentication
+  #       run: |
+  #         aws sts get-caller-identity
 
-      - name: Install kubectl
-        uses: azure/setup-kubectl@v4
-        with:
-          version: latest
+  #     - name: Install kubectl
+  #       uses: azure/setup-kubectl@v4
+  #       with:
+  #         version: latest
 
-      - name: Connect to EKS cluster
-        run: |
-          aws eks update-kubeconfig \
-            --region ca-central-1 \
-            --name retail-dev-eksjalexsol
+  #     - name: Connect to EKS cluster
+  #       run: |
+  #         aws eks update-kubeconfig \
+  #           --region ca-central-1 \
+  #           --name retail-dev-eksjalexsol
 
-      - name: Verify kuberbetes access
-        run: |
-          kubectl auth can-i create deployments --namespace default
-          kubectl get pods --namespace default
+  #     - name: Verify kuberbetes access
+  #       run: |
+  #         kubectl auth can-i create deployments --namespace default
+  #         kubectl get pods --namespace default
 
-      - name: Deploy application
-        run: |
-          kubectl apply -f k8s/
+  #     - name: Deploy application
+  #       run: |
+  #         kubectl apply -f k8s/
 
-      - name: Wait for deployment
-        run: |
-          kubectl rollout status deployment/gitops-demo \
-            --namespace default \
-            --timeout=180s
+  #     - name: Wait for deployment
+  #       run: |
+  #         kubectl rollout status deployment/gitops-demo \
+  #           --namespace default \
+  #           --timeout=180s
 
-      - name: Display application resources
-        run: |
-          kubectl get pods,services \
-            --namespace default
+  #     - name: Display application resources
+  #       run: |
+  #         kubectl get pods,services \
+  #           --namespace default
