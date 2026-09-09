@@ -151,10 +151,15 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6.2.4
         with:
-          role-to-assume: arn:aws:iam::247332613204:role/python-gitops-eks-deploy-role
-          #role-to-assume: ${{ secrets.AWS_GITHUB_ROLE_ARN }}
+          # role-to-assume: arn:aws:iam::247332613204:role/python-gitops-eks-deploy-role
+          role-to-assume: ${{ secrets.AWS_GITHUB_ROLE_ARN }}
+          role-session-name: GitHubActionsWorkflowSession
           aws-region: ca-central-1
           retry-max-attempts: 3
+
+      - name: Verify AWS Authentication
+        run: |
+          aws sts get-caller-identity
 
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
