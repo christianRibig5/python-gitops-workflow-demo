@@ -1,0 +1,7 @@
+---
+- name: Bootstrap monitoring GitOps application
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  roles:
+    - monitoring

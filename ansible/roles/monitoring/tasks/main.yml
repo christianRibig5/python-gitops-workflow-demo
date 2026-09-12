@@ -1,0 +1,35 @@
+---
+- name: Require a locally supplied Grafana password
+  ansible.builtin.assert:
+    that:
+      - lookup('ansible.builtin.env', 'GRAFANA_ADMIN_PASSWORD') | length >= 16
+    fail_msg: Set GRAFANA_ADMIN_PASSWORD to at least 16 characters before running this playbook.
+
+- name: Create monitoring namespace
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: monitoring
+
+- name: Create Grafana administrator credentials outside Git
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: grafana-admin
+        namespace: monitoring
+      type: Opaque
+      stringData:
+        admin-user: admin
+        admin-password: "{{ lookup('ansible.builtin.env', 'GRAFANA_ADMIN_PASSWORD') }}"
+  no_log: true
+
+- name: Register monitoring Application with Argo CD
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ playbook_dir }}/../argocd/monitoring-application.yaml"

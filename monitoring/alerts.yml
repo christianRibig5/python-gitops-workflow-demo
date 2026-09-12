@@ -1,0 +1,11 @@
+groups:
+  - name: target-health
+    rules:
+      - alert: PrometheusTargetDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Scrape target is down"
+          description: "Prometheus cannot scrape this target. Check Targets for details."
