@@ -55,11 +55,16 @@
       - --timeout=300s
   changed_when: false
 
+- name: Create Argo CD dashboard ingress
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ playbook_dir }}/../argocd/argocd-ingress.yaml"
+
 - name: Register application with Argo CD
   kubernetes.core.k8s:
     state: present
     namespace: "{{ argocd_namespace }}"
-    src: "../argocd/application.yaml"
+    src: "{{ playbook_dir }}/../argocd/application.yaml"
 
 - name: Retrieve initial Argo CD password
   ansible.builtin.command:
