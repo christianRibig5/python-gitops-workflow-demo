@@ -46,11 +46,13 @@
 
 - name: Wait for Argo CD to become ready
   ansible.builtin.command:
-    cmd: >
-      kubectl rollout status deployment
-      --all
-      --namespace {{ argocd_namespace }}
-      --timeout=600s
+    argv:
+      - kubectl
+      - rollout
+      - status
+      - deployment/argocd-server
+      - --namespace={{ argocd_namespace }}
+      - --timeout=300s
   changed_when: false
 
 - name: Register application with Argo CD
