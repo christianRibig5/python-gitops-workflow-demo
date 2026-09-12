@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   test:
-    name: Integration Test
+    name: test
     runs-on: ubuntu-latest
 
     steps:
@@ -101,6 +101,7 @@ jobs:
           exit-code: "1"
 
   update-manifest:
+    name: update
     needs: [build, scan]
     runs-on: ubuntu-latest
 
