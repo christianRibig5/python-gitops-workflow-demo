@@ -66,20 +66,20 @@
     namespace: "{{ argocd_namespace }}"
     src: "{{ playbook_dir }}/../argocd/application.yaml"
 
-- name: Retrieve initial Argo CD password
-  ansible.builtin.command:
-    cmd: >
-      kubectl get secret argocd-initial-admin-secret
-      --namespace {{ argocd_namespace }}
-      --output jsonpath='{.data.password}'
-  register: argocd_password_encoded
-  changed_when: false
-  no_log: true
+# - name: Retrieve initial Argo CD password
+#   ansible.builtin.command:
+#     cmd: >
+#       kubectl get secret argocd-initial-admin-secret
+#       --namespace {{ argocd_namespace }}
+#       --output jsonpath='{.data.password}'
+#   register: argocd_password_encoded
+#   changed_when: false
+#   no_log: true
 
-- name: Decode Argo CD password
-  ansible.builtin.set_fact:
-    argocd_password: "{{ argocd_password_encoded.stdout | b64decode }}"
-  no_log: true
+# - name: Decode Argo CD password
+#   ansible.builtin.set_fact:
+#     argocd_password: "{{ argocd_password_encoded.stdout | b64decode }}"
+#   no_log: true
 
 - name: Display Argo CD dashboard information
   ansible.builtin.debug:
