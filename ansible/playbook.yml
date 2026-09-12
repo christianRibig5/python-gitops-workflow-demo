@@ -3,11 +3,16 @@
   gather_facts: false
 
   vars:
-    aws_profile: dev-admin
-    aws_region: ca-central-1
-    eks_cluster_name: retail-dev-eksjalexsol
-    argocd_namespace: argocd
-    argocd_version: v3.4.8
+    ansible_python_interpreter: "{{ playbook_dir }}/../.venv/bin/python"
+
+  pre_tasks:
+    - name: Install Python libraries required by Kubernetes modules
+      ansible.builtin.pip:
+        name:
+          - "kubernetes>=24.2.0"
+          - PyYAML
+          - jsonpatch
+        executable: "{{ playbook_dir }}/../.venv/bin/pip"
 
   roles:
     - argocd

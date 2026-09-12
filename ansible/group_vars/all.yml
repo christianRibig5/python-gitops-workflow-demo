@@ -2,3 +2,5 @@ aws_profile: dev-admin
 aws_region: ca-central-1
 eks_cluster_name: retail-dev-eksjalexsol
 argocd_namespace: argocd
+argocd_version: v3.4.8
+argocd_hostname: argocd.vgc247.com

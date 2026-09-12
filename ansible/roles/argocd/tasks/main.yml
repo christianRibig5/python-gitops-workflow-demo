@@ -74,11 +74,17 @@
     argocd_password: "{{ argocd_password_encoded.stdout | b64decode }}"
   no_log: true
 
-- name: Display login information
+- name: Display Argo CD dashboard information
   ansible.builtin.debug:
     msg:
+      - "Dashboard: https://{{ argocd_hostname }}"
       - "Username: admin"
-      - "Password: {{ argocd_password }}"
-      - "After the playbook finishes, run:"
-      - "kubectl port-forward service/argocd-server -n argocd 8080:443"
-      - "Then open: https://localhost:8080"
+      - "To retrieve the initial password locally: argocd admin initial-password -n {{ argocd_namespace }}"
+# - name: Display login information
+#   ansible.builtin.debug:
+#     msg:
+#       - "Username: admin"
+#       - "Password: {{ argocd_password }}"
+#       - "After the playbook finishes, run:"
+#       - "kubectl port-forward service/argocd-server -n argocd 8080:443"
+#       - "Then open: https://localhost:8080"
