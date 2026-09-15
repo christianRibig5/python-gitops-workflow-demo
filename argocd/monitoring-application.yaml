@@ -1,21 +1,50 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
+
 metadata:
   name: monitoring
   namespace: argocd
+  labels:
+    app.kubernetes.io/name: monitoring
+    app.kubernetes.io/part-of: observability
+    app.kubernetes.io/managed-by: argocd
+
 spec:
   project: default
+
   source:
-    # Replace this URL with `git remote get-url origin` from YOUR project.
-    repoURL: https://github.com/conyeukwu25/python-gitops-workflow-demo.git
+    repoURL: https://github.com/christianRibig5/python-gitops-workflow-demo.git
     targetRevision: main
     path: monitoring
+
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
+
   syncPolicy:
     automated:
       selfHeal: true
+
+      # Intentionally disabled while Prometheus and Grafana use
+      # persistent EBS-backed PVCs.
       prune: false
+
     syncOptions:
+      # The repository also contains namespace.yaml, but this protects
+      # the initial deployment if the namespace does not exist yet.
       - CreateNamespace=true
+
+      # Only apply resources whose desired state has changed.
+      - ApplyOutOfSyncOnly=true
+
+      # Validate manifests against the Kubernetes API.
+      - Validate=true
+
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+
+  revisionHistoryLimit: 10

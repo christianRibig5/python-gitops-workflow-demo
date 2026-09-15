@@ -3,82 +3,114 @@ kind: Deployment
 metadata:
   name: grafana
   namespace: monitoring
+
 spec:
   replicas: 1
+
+  # Appropriate for the single ReadWriteOnce EBS volume.
+  strategy:
+    type: Recreate
+
   selector:
     matchLabels:
       app: grafana
+
   template:
     metadata:
       labels:
         app: grafana
+
     spec:
+      serviceAccountName: grafana-sa
+      terminationGracePeriodSeconds: 30
+
       securityContext:
         runAsNonRoot: true
         runAsUser: 472
         runAsGroup: 472
         fsGroup: 472
+        seccompProfile:
+          type: RuntimeDefault
+
       containers:
         - name: grafana
           image: grafana/grafana:13.1.5
           imagePullPolicy: IfNotPresent
+
           ports:
             - name: http
               containerPort: 3000
+              protocol: TCP
+
           env:
             - name: GF_SECURITY_ADMIN_USER
-              valueFrom:
-                secretKeyRef:
-                  name: grafana-admin
-                  key: admin-user
-            - name: GF_SECURITY_ADMIN_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: grafana-admin
-                  key: admin-password
+              value: admin
+
+            # Grafana reads the password from the CSI-mounted file.
+            - name: GF_SECURITY_ADMIN_PASSWORD__FILE
+              value: /mnt/secrets-store/admin-password
+
+            - name: GF_USERS_ALLOW_SIGN_UP
+              value: "false"
+
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "false"
+
           readinessProbe:
             httpGet:
               path: /api/health
               port: http
             initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
           livenessProbe:
             httpGet:
               path: /api/health
               port: http
             initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
           resources:
             requests:
               cpu: 50m
               memory: 128Mi
             limits:
               memory: 512Mi
+
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
-              drop: ["ALL"]
+              drop:
+                - ALL
+
           volumeMounts:
             - name: datasources
               mountPath: /etc/grafana/provisioning/datasources
               readOnly: true
+
+            - name: grafana-admin-secret
+              mountPath: /mnt/secrets-store
+              readOnly: true
+
             - name: data
               mountPath: /var/lib/grafana
+
       volumes:
         - name: datasources
           configMap:
             name: grafana-datasources
+
+        - name: grafana-admin-secret
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: grafana-admin-secret
+
         - name: data
-          emptyDir: {}
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: grafana
-  namespace: monitoring
-spec:
-  type: ClusterIP
-  selector:
-    app: grafana
-  ports:
-    - name: http
-      port: 80
-      targetPort: http
+          persistentVolumeClaim:
+            claimName: grafana-data

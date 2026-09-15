@@ -1,35 +1,65 @@
 ---
-- name: Require a locally supplied Grafana password
-  ansible.builtin.assert:
-    that:
-      - lookup('ansible.builtin.env', 'GRAFANA_ADMIN_PASSWORD') | length >= 16
-    fail_msg: Set GRAFANA_ADMIN_PASSWORD to at least 16 characters before running this playbook.
-
-- name: Create monitoring namespace
+- name: Ensure monitoring namespace exists
   kubernetes.core.k8s:
     state: present
+    apply: true
+    wait: true
     definition:
       apiVersion: v1
       kind: Namespace
       metadata:
         name: monitoring
 
-- name: Create Grafana administrator credentials outside Git
-  kubernetes.core.k8s:
-    state: present
-    definition:
-      apiVersion: v1
-      kind: Secret
-      metadata:
-        name: grafana-admin
-        namespace: monitoring
-      type: Opaque
-      stringData:
-        admin-user: admin
-        admin-password: "{{ lookup('ansible.builtin.env', 'GRAFANA_ADMIN_PASSWORD') }}"
-  no_log: true
+- name: Check Secrets Store CSI Driver CRD
+  kubernetes.core.k8s_info:
+    api_version: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    name: secretproviderclasses.secrets-store.csi.x-k8s.io
+  register: secret_provider_class_crd
 
-- name: Register monitoring Application with Argo CD
+- name: Require Secrets Store CSI Driver
+  ansible.builtin.assert:
+    that:
+      - secret_provider_class_crd.resources | length > 0
+    fail_msg: >-
+      Secrets Store CSI Driver is not installed. Install it before
+      deploying Grafana and Alertmanager.
+
+- name: Check EKS Pod Identity Agent
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: DaemonSet
+    name: eks-pod-identity-agent
+    namespace: kube-system
+  register: pod_identity_agent
+
+- name: Require EKS Pod Identity Agent
+  ansible.builtin.assert:
+    that:
+      - pod_identity_agent.resources | length > 0
+    fail_msg: >-
+      The EKS Pod Identity Agent is not installed in kube-system.
+      Install the EKS add-on through Terraform before deploying monitoring.
+
+- name: Check AWS Secrets and Configuration Provider
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: DaemonSet
+    name: secrets-store-csi-driver-provider-aws
+    namespace: kube-system
+  register: aws_secrets_provider
+
+- name: Require AWS Secrets and Configuration Provider
+  ansible.builtin.assert:
+    that:
+      - aws_secrets_provider.resources | length > 0
+    fail_msg: >-
+      The AWS provider for the Secrets Store CSI Driver is not installed.
+      Install ASCP before deploying Grafana and Alertmanager.
+
+- name: Register monitoring application with Argo CD
   kubernetes.core.k8s:
     state: present
+    apply: true
+    wait: true
     src: "{{ playbook_dir }}/../argocd/monitoring-application.yaml"

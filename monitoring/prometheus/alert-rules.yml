@@ -1,0 +1,14 @@
+groups:
+  - name: target-health
+    rules:
+      - alert: PrometheusTargetDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus target is down"
+          description: >-
+            Prometheus has been unable to scrape
+            {{ $labels.job }} target {{ $labels.instance }}
+            for more than 2 minutes.

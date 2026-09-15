@@ -1,0 +1,46 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: prometheus-https-ip-mode
+  namespace: monitoring
+
+  annotations:
+    # Dedicated Application Load Balancer
+    alb.ingress.kubernetes.io/load-balancer-name: prometheus-https-ip-mode
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    # Restrict dashboard access to your public IP
+    alb.ingress.kubernetes.io/inbound-cidrs: "68.151.201.197/32"
+    alb.ingress.kubernetes.io/target-type: ip
+
+    # Browser-to-ALB HTTPS configuration
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ca-central-1:247332613204:certificate/a9e969eb-41df-41e1-8770-0db426a5aa15
+
+    # ALB-to-Prometheus communication
+    alb.ingress.kubernetes.io/backend-protocol: HTTP
+
+    # Prometheus target-group health check
+    alb.ingress.kubernetes.io/healthcheck-protocol: HTTP
+    alb.ingress.kubernetes.io/healthcheck-port: traffic-port
+    alb.ingress.kubernetes.io/healthcheck-path: /-/healthy
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "15"
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: "5"
+    alb.ingress.kubernetes.io/success-codes: "200"
+    alb.ingress.kubernetes.io/healthy-threshold-count: "2"
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: "2"
+
+spec:
+  ingressClassName: alb
+
+  rules:
+    - host: prometheus.vgc247.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: prometheus
+                port:
+                  name: http
