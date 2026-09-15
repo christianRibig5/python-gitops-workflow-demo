@@ -18,7 +18,7 @@ spec:
       serviceAccountName: gitopsdemo-sa
       containers:
         - name: gitopsdemo
-          image: conyeukwu25/gitops-demo:259c8fe
+          image: conyeukwu25/gitops-demo:c748cd4
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
