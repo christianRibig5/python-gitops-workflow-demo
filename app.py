@@ -1,30 +1,34 @@
-from flask import Flask
+import os
+
+from flask import Flask, jsonify, render_template
+
 
 app = Flask(__name__)
 
 
-@app.route("/")
+@app.get("/")
 def home():
-    return """
-        <!DOCTYPE html>
-        <html>
-            <head>
-                <title>GitOps Demo</title>
-            </head>
-            <body>
-                <h1>Hello from Python GitOps! 🚀</h1>
-                <p>Deployed using Git Action, Argo CD, and Kubernetes.</p>
-            </body>
-        </html>
-    """
+    return render_template(
+        "index.html",
+        app_version=os.getenv("APP_VERSION", "v1.0.0"),
+        environment=os.getenv("APP_ENV", "development"),
+        aws_region=os.getenv("AWS_REGION", "ca-central-1"),
+    )
 
 
-@app.route("/health")
+@app.get("/health")
 def health():
-    return {
-        "status": "healthy🧑‍⚕️"
-    }
+    return jsonify(
+        status="healthy",
+        service="vgc-platform-demo",
+        version=os.getenv("APP_VERSION", "v1.0.0"),
+        environment=os.getenv("APP_ENV", "development"),
+    )
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(
+        host="0.0.0.0",
+        port=int(os.getenv("PORT", "5000")),
+        debug=os.getenv("FLASK_DEBUG", "false").lower() == "true",
+    )

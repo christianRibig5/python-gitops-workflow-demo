@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="VGC Cloud Platform - a production-style GitOps application running on AWS EKS.">
+  <meta name="theme-color" content="#07111f">
+  <title>VGC Cloud Platform</title>
+  <style>
+    :root {
+      --bg: #07111f;
+      --bg-soft: #0b182a;
+      --panel: rgba(16, 32, 52, .82);
+      --panel-solid: #102034;
+      --line: rgba(148, 163, 184, .17);
+      --text: #edf5ff;
+      --muted: #9bb0c7;
+      --cyan: #22d3ee;
+      --blue: #4f8cff;
+      --green: #34d399;
+      --amber: #fbbf24;
+      --shadow: 0 22px 70px rgba(0, 0, 0, .32);
+      --radius: 22px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 82% 8%, rgba(34, 211, 238, .13), transparent 29rem),
+        radial-gradient(circle at 10% 20%, rgba(79, 140, 255, .12), transparent 32rem),
+        var(--bg);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    a { color: inherit; text-decoration: none; }
+    button { font: inherit; }
+    .container { width: min(1160px, calc(100% - 40px)); margin: 0 auto; }
+
+    .grid-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      opacity: .32;
+      background-image:
+        linear-gradient(rgba(148, 163, 184, .045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(148, 163, 184, .045) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: linear-gradient(to bottom, black, transparent 82%);
+    }
+
+    .nav-wrap {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      border-bottom: 1px solid var(--line);
+      background: rgba(7, 17, 31, .78);
+      backdrop-filter: blur(18px);
+    }
+
+    nav {
+      min-height: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    .brand { display: flex; align-items: center; gap: 12px; font-weight: 800; letter-spacing: -.02em; }
+    .brand-mark {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(34, 211, 238, .45);
+      border-radius: 12px;
+      background: linear-gradient(145deg, rgba(34, 211, 238, .19), rgba(79, 140, 255, .17));
+      box-shadow: inset 0 0 22px rgba(34, 211, 238, .08);
+      color: var(--cyan);
+    }
+    .brand-mark svg { width: 22px; height: 22px; }
+    .brand small { display: block; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+
+    .nav-links { display: flex; align-items: center; gap: 26px; color: var(--muted); font-size: 14px; font-weight: 650; }
+    .nav-links a:hover { color: var(--text); }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      padding: 8px 13px;
+      border: 1px solid rgba(52, 211, 153, .25);
+      border-radius: 999px;
+      background: rgba(52, 211, 153, .08);
+      color: #a7f3d0;
+      font-size: 12px;
+      font-weight: 750;
+    }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 5px rgba(52, 211, 153, .11); }
+
+    .hero {
+      min-height: 670px;
+      display: grid;
+      grid-template-columns: 1.04fr .96fr;
+      align-items: center;
+      gap: 72px;
+      padding: 90px 0 72px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 22px;
+      color: #a5f3fc;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+    .eyebrow::before { content: ""; width: 28px; height: 1px; background: var(--cyan); }
+
+    h1 {
+      max-width: 720px;
+      margin: 0;
+      font-size: clamp(46px, 6vw, 78px);
+      line-height: 1.02;
+      letter-spacing: -.055em;
+    }
+    .gradient-text { color: transparent; background: linear-gradient(92deg, #edf5ff, #69e5f4 49%, #6e9cff); background-clip: text; -webkit-background-clip: text; }
+    .hero-copy { max-width: 640px; margin: 25px 0 0; color: var(--muted); font-size: 18px; }
+
+    .actions { display: flex; flex-wrap: wrap; gap: 13px; margin-top: 34px; }
+    .btn {
+      min-height: 50px;
+      padding: 0 20px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      cursor: pointer;
+      color: var(--text);
+      background: rgba(255, 255, 255, .035);
+      font-weight: 760;
+      transition: transform .2s ease, border-color .2s ease, background .2s ease;
+    }
+    .btn:hover { transform: translateY(-2px); border-color: rgba(148, 163, 184, .38); background: rgba(255, 255, 255, .06); }
+    .btn-primary { border-color: transparent; color: #04131e; background: linear-gradient(135deg, var(--cyan), #61a2ff); box-shadow: 0 10px 32px rgba(34, 211, 238, .17); }
+    .btn-primary:hover { border-color: transparent; background: linear-gradient(135deg, #67e8f9, #7eb1ff); }
+
+    .quick-facts { display: flex; flex-wrap: wrap; gap: 22px; margin-top: 44px; }
+    .fact { padding-right: 22px; border-right: 1px solid var(--line); }
+    .fact:last-child { border-right: 0; }
+    .fact strong { display: block; font-size: 17px; }
+    .fact span { color: var(--muted); font-size: 12px; }
+
+    .terminal-shell {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid rgba(79, 140, 255, .24);
+      border-radius: var(--radius);
+      background: linear-gradient(160deg, rgba(16, 32, 52, .94), rgba(7, 17, 31, .9));
+      box-shadow: var(--shadow);
+    }
+    .terminal-shell::before { content: ""; position: absolute; inset: -1px; z-index: -1; background: linear-gradient(135deg, rgba(34, 211, 238, .2), transparent 30%, rgba(79, 140, 255, .16)); }
+    .terminal-bar { display: flex; align-items: center; justify-content: space-between; padding: 15px 18px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+    .window-dots { display: flex; gap: 7px; }
+    .window-dots i { width: 9px; height: 9px; border-radius: 50%; background: #fb7185; }
+    .window-dots i:nth-child(2) { background: var(--amber); }
+    .window-dots i:nth-child(3) { background: var(--green); }
+    .terminal-body { min-height: 390px; padding: 25px 24px 28px; font: 13px/1.8 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; color: #c8d7e8; }
+    .term-muted { color: #69819b; }
+    .term-blue { color: #7dd3fc; }
+    .term-green { color: #6ee7b7; }
+    .term-amber { color: #fcd34d; }
+    .term-line { display: block; }
+    .deploy-card { margin: 20px 0 0; padding: 16px; border: 1px solid rgba(52, 211, 153, .2); border-radius: 13px; background: rgba(52, 211, 153, .055); }
+    .deploy-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+    .deploy-row + .deploy-row { margin-top: 8px; }
+
+    .section { padding: 96px 0; }
+    .section-alt { border-block: 1px solid var(--line); background: rgba(11, 24, 42, .42); }
+    .section-heading { max-width: 690px; margin-bottom: 44px; }
+    .section-heading h2 { margin: 0 0 14px; font-size: clamp(32px, 4vw, 49px); line-height: 1.08; letter-spacing: -.04em; }
+    .section-heading p { margin: 0; color: var(--muted); font-size: 17px; }
+
+    .pipeline {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+    }
+    .pipeline-step {
+      position: relative;
+      min-height: 175px;
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 17px;
+      background: var(--panel);
+    }
+    .pipeline-step:not(:last-child)::after { content: "›"; position: absolute; z-index: 2; right: -11px; top: 69px; color: #7089a4; font-size: 25px; font-weight: 300; }
+    .step-number { color: var(--cyan); font: 800 11px/1 ui-monospace, monospace; letter-spacing: .12em; }
+    .pipeline-step h3 { margin: 31px 0 7px; font-size: 17px; }
+    .pipeline-step p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+
+    .capability-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .capability {
+      min-height: 220px;
+      padding: 25px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: linear-gradient(145deg, rgba(16, 32, 52, .78), rgba(11, 24, 42, .55));
+    }
+    .icon-box { width: 42px; height: 42px; display: grid; place-items: center; border: 1px solid rgba(34, 211, 238, .18); border-radius: 12px; color: var(--cyan); background: rgba(34, 211, 238, .06); }
+    .icon-box svg { width: 21px; height: 21px; }
+    .capability h3 { margin: 22px 0 8px; font-size: 18px; }
+    .capability p { margin: 0; color: var(--muted); font-size: 14px; }
+
+    .architecture {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+      align-items: center;
+    }
+    .architecture-copy h2 { margin: 0 0 17px; font-size: clamp(33px, 4vw, 50px); line-height: 1.08; letter-spacing: -.04em; }
+    .architecture-copy > p { color: var(--muted); font-size: 17px; }
+    .check-list { display: grid; gap: 13px; margin-top: 27px; }
+    .check { display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 650; }
+    .check b { width: 23px; height: 23px; display: grid; place-items: center; border-radius: 50%; background: rgba(52, 211, 153, .1); color: var(--green); font-size: 12px; }
+
+    .arch-panel { padding: 24px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); box-shadow: var(--shadow); }
+    .arch-row { display: flex; align-items: stretch; gap: 10px; }
+    .arch-row + .arch-row { margin-top: 10px; }
+    .arch-node { flex: 1; min-height: 78px; display: grid; place-items: center; padding: 10px; border: 1px solid var(--line); border-radius: 13px; text-align: center; background: rgba(255,255,255,.025); font-size: 12px; font-weight: 750; }
+    .arch-node em { display: block; color: var(--muted); font-size: 10px; font-style: normal; font-weight: 500; }
+    .arch-arrow { display: grid; place-items: center; color: #617a95; }
+    .arch-wide { min-height: 70px; color: #bfeff7; border-color: rgba(34, 211, 238, .22); background: rgba(34, 211, 238, .055); }
+
+    .final-cta { padding: 86px 0 100px; text-align: center; }
+    .final-card { padding: 58px 30px; border: 1px solid rgba(79, 140, 255, .22); border-radius: 26px; background: radial-gradient(circle at top, rgba(34, 211, 238, .1), transparent 58%), var(--panel); box-shadow: var(--shadow); }
+    .final-card h2 { margin: 0; font-size: clamp(31px, 4vw, 48px); letter-spacing: -.04em; }
+    .final-card p { max-width: 640px; margin: 15px auto 27px; color: var(--muted); }
+
+    footer { padding: 25px 0 32px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+    .footer-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+    .footer-stack { display: flex; flex-wrap: wrap; gap: 16px; }
+
+    .toast {
+      position: fixed;
+      right: 24px;
+      bottom: 24px;
+      z-index: 50;
+      min-width: 275px;
+      padding: 16px 18px;
+      border: 1px solid rgba(52, 211, 153, .3);
+      border-radius: 14px;
+      background: #102034;
+      box-shadow: var(--shadow);
+      opacity: 0;
+      transform: translateY(14px);
+      pointer-events: none;
+      transition: .25s ease;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast strong { display: block; color: #a7f3d0; }
+    .toast span { color: var(--muted); font-size: 12px; }
+
+    @media (max-width: 960px) {
+      .nav-links a { display: none; }
+      .hero { grid-template-columns: 1fr; gap: 50px; padding-top: 72px; }
+      .terminal-shell { max-width: 720px; }
+      .pipeline { grid-template-columns: repeat(2, 1fr); }
+      .pipeline-step:not(:last-child)::after { display: none; }
+      .capability-grid { grid-template-columns: repeat(2, 1fr); }
+      .architecture { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 620px) {
+      .container { width: min(100% - 28px, 1160px); }
+      nav { min-height: 64px; }
+      .brand small { display: none; }
+      .status-pill { padding: 7px 10px; }
+      .hero { min-height: auto; padding: 64px 0; }
+      h1 { font-size: 44px; }
+      .hero-copy { font-size: 16px; }
+      .quick-facts { gap: 14px; }
+      .fact { width: calc(50% - 7px); padding: 0; border: 0; }
+      .terminal-body { min-height: 360px; padding: 20px 17px; font-size: 11px; }
+      .section { padding: 72px 0; }
+      .pipeline, .capability-grid { grid-template-columns: 1fr; }
+      .pipeline-step { min-height: 145px; }
+      .arch-row { flex-direction: column; }
+      .arch-arrow { transform: rotate(90deg); height: 18px; }
+      .footer-row { align-items: flex-start; flex-direction: column; }
+      .toast { left: 14px; right: 14px; bottom: 14px; min-width: auto; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="grid-overlay"></div>
+
+  <header class="nav-wrap">
+    <nav class="container" aria-label="Primary navigation">
+      <a class="brand" href="#top" aria-label="VGC Cloud Platform home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/></svg>
+        </span>
+        <span>VGC Cloud Platform<small>Platform Engineering</small></span>
+      </a>
+      <div class="nav-links">
+        <a href="#delivery">Delivery</a>
+        <a href="#capabilities">Capabilities</a>
+        <a href="#architecture">Architecture</a>
+        <span class="status-pill"><span class="status-dot"></span><span id="nav-status">Systems operational</span></span>
+      </div>
+    </nav>
+  </header>
+
+  <main id="top">
+    <section class="hero container">
+      <div>
+        <div class="eyebrow">Production-style GitOps environment</div>
+        <h1>Infrastructure that ships with <span class="gradient-text">confidence.</span></h1>
+        <p class="hero-copy">A cloud-native reference application delivered to AWS EKS through automated CI, declarative GitOps, secure container workflows, and end-to-end observability.</p>
+        <div class="actions">
+          <a class="btn btn-primary" href="#architecture">Explore architecture <span aria-hidden="true">→</span></a>
+          <button class="btn" id="health-button" type="button">Run health check</button>
+        </div>
+        <div class="quick-facts" aria-label="Deployment information">
+          <div class="fact"><strong>{{ environment|capitalize }}</strong><span>Environment</span></div>
+          <div class="fact"><strong>{{ aws_region }}</strong><span>AWS region</span></div>
+          <div class="fact"><strong>{{ app_version }}</strong><span>Release</span></div>
+          <div class="fact"><strong>99.9%</strong><span>Availability target</span></div>
+        </div>
+      </div>
+
+      <div class="terminal-shell" aria-label="Deployment status console">
+        <div class="terminal-bar">
+          <span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span>deployment / {{ environment }}</span>
+          <span>live</span>
+        </div>
+        <div class="terminal-body">
+          <span class="term-line"><span class="term-muted">$</span> kubectl get deployment vgc-platform</span>
+          <span class="term-line term-muted">NAME&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;READY&nbsp;&nbsp;UP-TO-DATE&nbsp;&nbsp;AVAILABLE</span>
+          <span class="term-line"><span class="term-blue">vgc-platform</span>&nbsp;&nbsp;&nbsp;3/3&nbsp;&nbsp;&nbsp;&nbsp;3&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3</span>
+          <span class="term-line">&nbsp;</span>
+          <span class="term-line"><span class="term-muted">$</span> argocd app get vgc-platform</span>
+          <span class="term-line">Sync Status:&nbsp;&nbsp;&nbsp;<span class="term-green">Synced</span></span>
+          <span class="term-line">Health Status:&nbsp;<span class="term-green">Healthy</span></span>
+          <span class="term-line">Revision:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="term-amber">{{ app_version }}</span></span>
+          <div class="deploy-card">
+            <div class="deploy-row"><span>Container image</span><span class="term-green">verified</span></div>
+            <div class="deploy-row"><span>Security scan</span><span class="term-green">passed</span></div>
+            <div class="deploy-row"><span>Desired state</span><span class="term-green">converged</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-alt" id="delivery">
+      <div class="container">
+        <div class="section-heading">
+          <div class="eyebrow">Automated delivery</div>
+          <h2>From commit to production, with every gate visible.</h2>
+          <p>The delivery workflow separates continuous integration from continuous deployment and keeps Git as the source of truth.</p>
+        </div>
+        <div class="pipeline">
+          <article class="pipeline-step"><span class="step-number">01 / SOURCE</span><h3>Code change</h3><p>A pull request starts the controlled delivery workflow.</p></article>
+          <article class="pipeline-step"><span class="step-number">02 / VERIFY</span><h3>Test and lint</h3><p>Automated tests and static analysis protect code quality.</p></article>
+          <article class="pipeline-step"><span class="step-number">03 / SECURE</span><h3>Build and scan</h3><p>The immutable container is scanned before publication.</p></article>
+          <article class="pipeline-step"><span class="step-number">04 / DECLARE</span><h3>Update manifest</h3><p>GitHub Actions records the approved image version in Git.</p></article>
+          <article class="pipeline-step"><span class="step-number">05 / RELEASE</span><h3>Argo CD sync</h3><p>Argo CD reconciles the declared state onto Amazon EKS.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="capabilities">
+      <div class="container">
+        <div class="section-heading">
+          <div class="eyebrow">Platform capabilities</div>
+          <h2>Designed around reliability, security, and operability.</h2>
+        </div>
+        <div class="capability-grid">
+          <article class="capability"><div class="icon-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 4 7v10l8 4 8-4V7z"/><path d="m4 7 8 4 8-4M12 11v10"/></svg></div><h3>Container orchestration</h3><p>Kubernetes deployments, health probes, services, ingress, scaling, and self-healing workloads on Amazon EKS.</p></article>
+          <article class="capability"><div class="icon-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2 5 5v6c0 5 3 8.5 7 11 4-2.5 7-6 7-11V5z"/><path d="m9 12 2 2 4-5"/></svg></div><h3>Secure delivery</h3><p>OIDC-based cloud access, least-privilege IAM, immutable images, vulnerability scanning, and policy gates.</p></article>
+          <article class="capability"><div class="icon-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V9m5 10V5m5 14v-7m5 7V3"/></svg></div><h3>Observability</h3><p>Metrics and dashboards through Prometheus and Grafana, with actionable alert routing through Alertmanager.</p></article>
+          <article class="capability"><div class="icon-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/><circle cx="18" cy="18" r="2"/></svg></div><h3>Infrastructure as code</h3><p>Repeatable AWS networking, EKS, IAM, registry, and supporting services provisioned through Terraform.</p></article>
+          <article class="capability"><div class="icon-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="12" cy="18" r="2"/><path d="m8 7 3 9m5-9-3 9M8 6h8"/></svg></div><h3>GitOps operations</h3><p>Declarative configuration, automated reconciliation, clear deployment history, and simple rollback through Git.</p></article>
+          <article class="capability"><div class="icon-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg></div><h3>Operational readiness</h3><p>Application health endpoints, controlled releases, replica availability, and platform signals for fast troubleshooting.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-alt" id="architecture">
+      <div class="container architecture">
+        <div class="architecture-copy">
+          <div class="eyebrow">Reference architecture</div>
+          <h2>A clear path from developer intent to running workload.</h2>
+          <p>Each tool has a defined responsibility. CI validates and packages the change; GitOps deploys it; Kubernetes runs it; observability explains its behavior.</p>
+          <div class="check-list">
+            <div class="check"><b>✓</b> GitHub Actions handles CI and manifest updates</div>
+            <div class="check"><b>✓</b> Argo CD continuously reconciles desired state</div>
+            <div class="check"><b>✓</b> AWS EKS provides the runtime platform</div>
+            <div class="check"><b>✓</b> Prometheus, Grafana, and Alertmanager close the feedback loop</div>
+          </div>
+        </div>
+        <div class="arch-panel" aria-label="Application architecture diagram">
+          <div class="arch-row">
+            <div class="arch-node">GitHub<em>Source + manifests</em></div><div class="arch-arrow">→</div>
+            <div class="arch-node">GitHub Actions<em>Test + build + scan</em></div><div class="arch-arrow">→</div>
+            <div class="arch-node">Registry<em>Immutable image</em></div>
+          </div>
+          <div class="arch-row"><div class="arch-node arch-wide">Argo CD<em>GitOps reconciliation and deployment control</em></div></div>
+          <div class="arch-row">
+            <div class="arch-node">AWS ALB<em>TLS ingress</em></div><div class="arch-arrow">→</div>
+            <div class="arch-node">Amazon EKS<em>Service + pods</em></div><div class="arch-arrow">→</div>
+            <div class="arch-node">Cloud services<em>IAM + secrets + data</em></div>
+          </div>
+          <div class="arch-row"><div class="arch-node arch-wide">Prometheus + Grafana + Alertmanager<em>Metrics, visualization, alerting, and operational feedback</em></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="final-cta">
+      <div class="container">
+        <div class="final-card">
+          <div class="eyebrow">Live service verification</div>
+          <h2>Platform status should be observable, not assumed.</h2>
+          <p>Call the application's health endpoint to verify that this running deployment can respond successfully.</p>
+          <button class="btn btn-primary" id="health-button-bottom" type="button">Check application health <span aria-hidden="true">→</span></button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container footer-row">
+      <span>© <span id="year"></span> VGC Cloud Platform</span>
+      <span class="footer-stack"><span>AWS EKS</span><span>GitHub Actions</span><span>Argo CD</span><span>Prometheus</span><span>Grafana</span></span>
+    </div>
+  </footer>
+
+  <div class="toast" id="toast" role="status" aria-live="polite">
+    <strong id="toast-title">Service is healthy</strong>
+    <span id="toast-message">The /health endpoint responded successfully.</span>
+  </div>
+
+  <script>
+    const toast = document.getElementById('toast');
+    const toastTitle = document.getElementById('toast-title');
+    const toastMessage = document.getElementById('toast-message');
+    const navStatus = document.getElementById('nav-status');
+    let toastTimer;
+
+    document.getElementById('year').textContent = new Date().getFullYear();
+
+    async function checkHealth(button) {
+      const original = button.textContent;
+      button.disabled = true;
+      button.textContent = 'Checking service...';
+      try {
+        const response = await fetch('/health', { headers: { 'Accept': 'application/json' } });
+        if (!response.ok) throw new Error('Health endpoint returned ' + response.status);
+        const data = await response.json();
+        toastTitle.textContent = 'Service is ' + (data.status || 'healthy');
+        toastMessage.textContent = `${data.service || 'Application'} · ${data.environment || 'production'} · ${data.version || ''}`;
+        navStatus.textContent = 'Systems operational';
+      } catch (error) {
+        toastTitle.textContent = 'Health check unavailable';
+        toastMessage.textContent = 'The service could not complete the health request.';
+        navStatus.textContent = 'Status unavailable';
+      } finally {
+        button.disabled = false;
+        button.textContent = original;
+        toast.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toast.classList.remove('show'), 4300);
+      }
+    }
+
+    document.getElementById('health-button').addEventListener('click', event => checkHealth(event.currentTarget));
+    document.getElementById('health-button-bottom').addEventListener('click', event => checkHealth(event.currentTarget));
+  </script>
+</body>
+</html>
