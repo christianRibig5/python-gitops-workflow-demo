@@ -90,6 +90,10 @@ spec:
             - name: data
               mountPath: /prometheus
 
+            - name: grafana-cloud-credentials
+              mountPath: /etc/prometheus/grafana-cloud
+              readOnly: true
+
       volumes:
         - name: config
           configMap:
@@ -103,3 +107,9 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: prometheus-data
+        - name: grafana-cloud-credentials
+          secret:
+            secretName: grafana-cloud-credentials
+            items:
+              - key: password
+                path: password

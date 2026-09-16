@@ -3,23 +3,17 @@ kind: Deployment
 metadata:
   name: grafana
   namespace: monitoring
-
 spec:
   replicas: 1
-
-  # Appropriate for the single ReadWriteOnce EBS volume.
   strategy:
     type: Recreate
-
   selector:
     matchLabels:
       app: grafana
-
   template:
     metadata:
       labels:
         app: grafana
-
     spec:
       serviceAccountName: grafana-sa
       terminationGracePeriodSeconds: 30
@@ -29,6 +23,8 @@ spec:
         runAsUser: 472
         runAsGroup: 472
         fsGroup: 472
+        supplementalGroups:
+          - 0
         seccompProfile:
           type: RuntimeDefault
 
@@ -44,15 +40,11 @@ spec:
 
           env:
             - name: GF_SECURITY_ADMIN_USER
-              value: admin
-
-            # Grafana reads the password from the CSI-mounted file.
+              value: "admin"
             - name: GF_SECURITY_ADMIN_PASSWORD__FILE
-              value: /mnt/secrets-store/admin-password
-
+              value: "/mnt/secrets-store/grafana-admin-password"
             - name: GF_USERS_ALLOW_SIGN_UP
               value: "false"
-
             - name: GF_AUTH_ANONYMOUS_ENABLED
               value: "false"
 
@@ -92,7 +84,7 @@ spec:
               mountPath: /etc/grafana/provisioning/datasources
               readOnly: true
 
-            - name: grafana-admin-secret
+            - name: grafana-admin-password
               mountPath: /mnt/secrets-store
               readOnly: true
 
@@ -104,13 +96,13 @@ spec:
           configMap:
             name: grafana-datasources
 
-        - name: grafana-admin-secret
+        - name: grafana-admin-password
           csi:
             driver: secrets-store.csi.k8s.io
             readOnly: true
             volumeAttributes:
-              secretProviderClass: grafana-admin-secret
+              secretProviderClass: grafana-admin-password
 
         - name: data
           persistentVolumeClaim:
-            claimName: grafana-data
+            claimName: grafana-storage

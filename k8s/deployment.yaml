@@ -7,6 +7,13 @@ metadata:
     app.kubernetes.io/name: gitopsdemo
 spec:
   replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # The current EKS nodes are at their Pod limit, so replace one Pod at a
+      # time instead of requiring an additional surge Pod during rollouts.
+      maxSurge: 0
+      maxUnavailable: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: gitopsdemo
@@ -14,6 +21,10 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: gitopsdemo
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /metrics
+        prometheus.io/port: "5000"
     spec:
       serviceAccountName: gitopsdemo-sa
       containers:
@@ -24,6 +35,22 @@ spec:
             - name: http
               containerPort: 5000
               protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
           resources:
             requests:
               cpu: 100m

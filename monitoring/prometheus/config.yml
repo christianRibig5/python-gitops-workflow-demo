@@ -10,6 +10,13 @@ alerting:
     - static_configs:
         - targets: ["alertmanager.monitoring.svc.cluster.local:9093"]
 
+# Forward locally scrapped prometheus metrics to Grafana Cloud
+remote_write:
+  - url: "https://prometheus-prod-32-prod-ca-east-0.grafana.net/api/prom/push"
+    basic_auth:
+      username: "3588224"
+      password_file: /etc/prometheus/grafana-cloud/password
+
 scrape_configs:
   - job_name: prometheus
     static_configs:
@@ -18,6 +25,46 @@ scrape_configs:
   - job_name: alertmanager
     static_configs:
       - targets: ["alertmanager.monitoring.svc.cluster.local:9093"]
+
+  # Scrape kubelet metrics through the Kubernetes API server. This provides
+  # node health and kubelet operational metrics without exposing port 10250.
+  - job_name: kubernetes-nodes
+    scheme: https
+    authorization:
+      credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    tls_config:
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    kubernetes_sd_configs:
+      - role: node
+    relabel_configs:
+      - target_label: __address__
+        replacement: kubernetes.default.svc:443
+      - source_labels: [__meta_kubernetes_node_name]
+        target_label: __metrics_path__
+        regex: (.+)
+        replacement: /api/v1/nodes/${1}/proxy/metrics
+      - source_labels: [__meta_kubernetes_node_name]
+        target_label: node
+
+  # cAdvisor is provided by kubelet and exposes node, Pod, and container CPU,
+  # memory, filesystem, and network usage metrics.
+  - job_name: kubernetes-cadvisor
+    scheme: https
+    authorization:
+      credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    tls_config:
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    kubernetes_sd_configs:
+      - role: node
+    relabel_configs:
+      - target_label: __address__
+        replacement: kubernetes.default.svc:443
+      - source_labels: [__meta_kubernetes_node_name]
+        target_label: __metrics_path__
+        regex: (.+)
+        replacement: /api/v1/nodes/${1}/proxy/metrics/cadvisor
+      - source_labels: [__meta_kubernetes_node_name]
+        target_label: node
 
   # Only pods with prometheus.io/scrape: "true" are discovered.
   # The application must serve real Prometheus metrics at /metrics.
@@ -45,3 +92,5 @@ scrape_configs:
         target_label: namespace
       - source_labels: [__meta_kubernetes_pod_name]
         target_label: pod
+      - source_labels: [__meta_kubernetes_pod_container_name]
+        target_label: container
