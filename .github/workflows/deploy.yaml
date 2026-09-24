@@ -129,6 +129,7 @@ jobs:
           tags: conyeukwu25/gitops-demo:${{ steps.vars.outputs.short_sha }}
 
   trivy-scan:
+    name: trivy
     needs: build
     runs-on: ubuntu-latest
 
