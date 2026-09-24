@@ -11,8 +11,8 @@ terraform {
   # Remote Backend
   backend "s3" {
     bucket       = "tfstate-dev-ca-central-1-i1zfl3al"
-    key          = "secret/grafana-admin/dev/terraform.tfstate"
-    region       = "ca-central-1" #variable cant be applied
+    key          = "kms/monitoring/dev/terraform.tfstate"
+    region       = "ca-central-1" # Variables cannot be used in backend configuration
     encrypt      = true
     use_lockfile = true
   }

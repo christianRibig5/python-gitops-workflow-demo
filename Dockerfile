@@ -41,6 +41,15 @@ RUN python -m pip install \
 
 COPY . .
 
+# Create non-root application user
+RUN groupadd --system appgroup \
+    && useradd --system --gid appgroup --create-home appuser
+
+# Make sure application files belong to the application user
+RUN chown -R appuser:appgroup /app
+
+USER appuser
+
 EXPOSE 5000
 
 CMD ["python", "app.py"]

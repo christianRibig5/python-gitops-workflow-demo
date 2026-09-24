@@ -30,6 +30,12 @@ spec:
       containers:
         - name: gitopsdemo
           image: conyeukwu25/gitops-demo:1341883
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop:
+                - ALL
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
