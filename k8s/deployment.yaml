@@ -29,7 +29,7 @@ spec:
       serviceAccountName: gitopsdemo-sa
       containers:
         - name: gitopsdemo
-          image: conyeukwu25/gitops-demo:7bcb2fb
+          image: conyeukwu25/gitops-demo:c025a62
           securityContext:
             allowPrivilegeEscalation: false
             runAsNonRoot: true
