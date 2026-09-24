@@ -38,8 +38,29 @@ jobs:
       - name: Run integration tests
         run: python -m pytest tests/app_integration.py -v
 
+  lint-scan:
+    name: Lint
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Ruff
+        run: python -m pip install "ruff==0.16.8"
+
+      - name: Run Ruff lint scan
+        run: ruff check .
+
   sast-scan:
-    name: SAST scan
+    name: SAST
     needs: test
     runs-on: ubuntu-latest
 
@@ -60,7 +81,7 @@ jobs:
         run: semgrep scan --config auto --error .
 
   build:
-    needs: test
+    needs: [sast-scan, lint-scan]
     runs-on: ubuntu-latest
     outputs:
       image_tag: ${{ steps.vars.outputs.short_sha }}
@@ -124,7 +145,7 @@ jobs:
 
   update-manifest:
     name: update
-    needs: [build, sast-scan, trivy-scan]
+    needs: [build, trivy-scan]
     runs-on: ubuntu-latest
 
     steps:

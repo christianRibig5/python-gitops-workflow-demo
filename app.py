@@ -10,7 +10,6 @@ from prometheus_client import (
     generate_latest,
 )
 
-
 app = Flask(__name__)
 
 
@@ -38,12 +37,12 @@ HTTP_REQUESTS_IN_PROGRESS = Gauge(
 def start_request_metrics():
     """Start timing application requests while excluding Prometheus scrapes."""
     if request.path == "/metrics":
-        return None
+        return
 
     g.metrics_started_at = perf_counter()
     g.metrics_method = request.method
     HTTP_REQUESTS_IN_PROGRESS.labels(method=request.method).inc()
-    return None
+    return
 
 
 @app.after_request
