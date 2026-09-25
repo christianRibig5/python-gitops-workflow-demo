@@ -1,4 +1,5 @@
-name: Test, SAST, Build, Scan and Update-manifest
+name: Test, Lint, SAST, Compliance, Build, Scan and Update-manifest
+
 on:
   push:
     branches:
@@ -16,8 +17,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # ============================================================
+  # TEST
+  # Run application integration tests
+  # ============================================================
   test:
-    name: test
+    name: Test
     runs-on: ubuntu-latest
 
     steps:
@@ -25,30 +30,35 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Python
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
-          cache: pip
+          cache: "pip"
 
       - name: Install dependencies
         run: |
+          python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
           python -m pip install pytest
 
       - name: Run integration tests
         run: python -m pytest tests/app_integration.py -v
 
+  # ============================================================
+  # LINT
+  # Check Python code quality using Ruff
+  # ============================================================
   lint-scan:
     name: Lint
     needs: test
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Python
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
           cache: "pip"
@@ -59,6 +69,10 @@ jobs:
       - name: Run Ruff lint scan
         run: ruff check .
 
+  # ============================================================
+  # SAST
+  # Static Application Security Testing using Semgrep
+  # ============================================================
   sast-scan:
     name: SAST
     needs: test
@@ -69,10 +83,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Python
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
-          cache: pip
+          cache: "pip"
 
       - name: Install Semgrep
         run: python -m pip install --upgrade semgrep
@@ -80,40 +94,119 @@ jobs:
       - name: Run Semgrep SAST
         run: semgrep scan --config auto --error .
 
-  build:
-    needs: [sast-scan, lint-scan]
+  # ============================================================
+  # POLICY-AS-CODE / COMPLIANCE
+  #
+  # Regal:
+  #   Lints the Rego policy source.
+  #
+  # Conftest:
+  #   Evaluates Kubernetes manifests against the Rego policies.
+  # ============================================================
+  compliance-scan:
+    name: Policy Compliance
+    needs: test
     runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # --------------------------------------------------------
+      # Install Regal
+      # --------------------------------------------------------
+      - name: Install Regal
+        shell: bash
+        run: |
+          REGAL_VERSION="0.36.1"
+
+          curl -sL \
+            "https://github.com/StyraInc/regal/releases/download/v${REGAL_VERSION}/regal_Linux_x86_64" \
+            -o regal
+
+          chmod +x regal
+          sudo mv regal /usr/local/bin/regal
+
+          regal version
+
+      # --------------------------------------------------------
+      # Install Conftest
+      # --------------------------------------------------------
+      - name: Install Conftest
+        shell: bash
+        run: |
+          CONFTEST_VERSION="0.62.0"
+
+          curl -sL \
+            "https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}/conftest_${CONFTEST_VERSION}_Linux_x86_64.tar.gz" \
+            -o conftest.tar.gz
+
+          tar xzf conftest.tar.gz
+          sudo mv conftest /usr/local/bin/conftest
+
+          conftest --version
+
+      # --------------------------------------------------------
+      # Lint the Rego policy itself
+      # --------------------------------------------------------
+      - name: Run Regal policy lint
+        run: regal lint policy/kubernetes/security.rego
+
+      # --------------------------------------------------------
+      # Enforce Kubernetes Policy-as-Code
+      # --------------------------------------------------------
+      - name: Run Conftest compliance scan
+        run: |
+          conftest test k8s/ monitoring/ argocd/ \
+            --policy policy/kubernetes \
+            --all-namespaces
+
+  # ============================================================
+  # BUILD
+  #
+  # Build only when:
+  # - Tests pass
+  # - Ruff passes
+  # - Semgrep passes
+  # - Policy compliance passes
+  # ============================================================
+  build:
+    name: Build
+    needs: [lint-scan, sast-scan, compliance-scan]
+    runs-on: ubuntu-latest
+
     outputs:
       image_tag: ${{ steps.vars.outputs.short_sha }}
+
     steps:
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           ref: main
 
       - name: Set up Python
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
           cache: "pip"
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: python -m pip install -r requirements.txt
 
-      - name: Validate python syntax
+      - name: Validate Python syntax
         run: python -m py_compile app.py
 
-      - name: Login to docker Hub
+      - name: Login to Docker Hub
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Set up QEMU to build image for multi multi-architecture
+      - name: Set up QEMU for multi-architecture build
         uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
 
-      - name: Create short Git SHA (secured hash algorithm)
+      - name: Create short Git SHA
         id: vars
         shell: bash
         run: echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
@@ -128,8 +221,12 @@ jobs:
           push: true
           tags: conyeukwu25/gitops-demo:${{ steps.vars.outputs.short_sha }}
 
+  # ============================================================
+  # CONTAINER SECURITY SCAN
+  # Scan the built Docker image using Trivy
+  # ============================================================
   trivy-scan:
-    name: trivy
+    name: Trivy
     needs: build
     runs-on: ubuntu-latest
 
@@ -144,22 +241,31 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
 
+  # ============================================================
+  # UPDATE GITOPS MANIFEST
+  #
+  # Only update Kubernetes deployment after:
+  # - Build succeeds
+  # - Trivy passes
+  # ============================================================
   update-manifest:
-    name: update
+    name: Update
     needs: [build, trivy-scan]
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           ref: main
 
-      - name: Update Kubernetes Image tags
+      - name: Update Kubernetes image tag
         shell: bash
         run: |
-          sed -i "s|image: conyeukwu25/gitops-demo:.*|image: conyeukwu25/gitops-demo:${{ needs.build.outputs.image_tag }}|" k8s/deployment.yaml
+          sed -i \
+            "s|image: conyeukwu25/gitops-demo:.*|image: conyeukwu25/gitops-demo:${{ needs.build.outputs.image_tag }}|" \
+            k8s/deployment.yaml
 
       - name: Commit updated deployment
         shell: bash
@@ -171,8 +277,9 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           git add k8s/deployment.yaml
-          git commit -m"Update image to ${{ needs.build.outputs.image_tag }} [skip ci]"
+          git commit -m "Update image to ${{ needs.build.outputs.image_tag }} [skip ci]"
           git push
 
   # deploy:
