@@ -58,4 +58,7 @@ USER 10001:10001
 
 EXPOSE 5000
 
-CMD ["python", "app.py"]
+# Run the Flask application with the Gunicorn WSGI server.
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:app"] 
+
+# CMD ["python", "app.py"]
