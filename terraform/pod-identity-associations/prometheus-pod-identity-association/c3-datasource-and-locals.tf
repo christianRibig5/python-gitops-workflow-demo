@@ -16,9 +16,6 @@ data "terraform_remote_state" "eks" {
 # ============================================================
 # Monitoring KMS Remote State
 # ============================================================
-# Provides the KMS key ARN used to encrypt monitoring secrets.
-# The Alertmanager IAM policy uses this for kms:Decrypt.
-# ============================================================
 
 data "terraform_remote_state" "monitoring_kms" {
   backend = "s3"
@@ -41,11 +38,19 @@ data "aws_eks_cluster_auth" "eks" {
 
 
 # ============================================================
-# Alertmanager Zoho SMTP Secret
+# Grafana Cloud Secret
 # ============================================================
 
-data "aws_secretsmanager_secret" "alertmanager_zoho" {
-  name = var.zoho_secret_name
+locals {
+  prometheus_grafana_cloud_secret_name = (
+    var.prometheus_grafana_cloud_secret_name != null
+    ? var.prometheus_grafana_cloud_secret_name
+    : "${var.environment_name}/monitoring/prometheus/grafana-cloud-token"
+  )
+}
+
+data "aws_secretsmanager_secret" "prometheus_grafana_cloud_token" {
+  name = local.prometheus_grafana_cloud_secret_name
 }
 
 

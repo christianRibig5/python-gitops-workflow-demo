@@ -5,6 +5,7 @@
 resource "aws_iam_policy" "alertmanager_secret_read" {
   name = "${data.terraform_remote_state.eks.outputs.eks_cluster_name}-alertmanager-secret-read"
 
+  # Keep this description unchanged to avoid IAM policy replacement
   description = "Allows Alertmanager to read only its Zoho SMTP password"
 
   policy = jsonencode({
@@ -21,12 +22,23 @@ resource "aws_iam_policy" "alertmanager_secret_read" {
         ]
 
         Resource = data.aws_secretsmanager_secret.alertmanager_zoho.arn
+      },
+      {
+        Sid    = "DecryptAlertmanagerZohoPassword"
+        Effect = "Allow"
+
+        Action = [
+          "kms:Decrypt"
+        ]
+
+        Resource = data.terraform_remote_state.monitoring_kms.outputs.kms_key_arn
       }
     ]
   })
 
   tags = var.tags
 }
+
 
 # ============================================================
 # Alertmanager EKS Pod Identity
