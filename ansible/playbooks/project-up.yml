@@ -1,0 +1,54 @@
+---
+# ============================================================
+# Python GitOps Workflow Demo - Project Up
+#
+# Purpose:
+# Orchestrate project-specific infrastructure and workloads
+# on top of the reusable shared AWS lab.
+#
+# Deployment order:
+#   1. Preflight
+#   2. Kubeconfig
+#   3. Project Terraform
+#   4. Argo CD
+#   5. Monitoring / GitOps workloads
+# ============================================================
+
+- name: Python GitOps Project - Bring Up
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  # ----------------------------------------------------------
+  # Load centralized project variables
+  # ----------------------------------------------------------
+  vars_files:
+    - "{{ playbook_dir }}/../group_vars/all.yml"
+
+  # ----------------------------------------------------------
+  # Project orchestration
+  # ----------------------------------------------------------
+  roles:
+    # Step 1: Validate local tools, AWS authentication,
+    # and shared EKS availability.
+    - role: preflight
+      tags:
+        - preflight
+
+    # Step 2: Configure kubectl for the shared EKS cluster
+    # and verify Kubernetes API connectivity.
+    - role: kubeconfig
+      tags:
+        - kubeconfig
+
+    # Step 3: Provision project-specific AWS infrastructure
+    # in dependency order using Terraform.
+    - role: terraform
+      tags:
+        - terraform
+
+    # Step 4: Install and configure Argo CD,
+    # then register the project's GitOps applications.
+    - role: argocd
+      tags:
+        - argocd

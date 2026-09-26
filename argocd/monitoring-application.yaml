@@ -4,6 +4,7 @@ kind: Application
 metadata:
   name: monitoring
   namespace: argocd
+
   labels:
     app.kubernetes.io/name: monitoring
     app.kubernetes.io/part-of: observability
@@ -12,34 +13,45 @@ metadata:
 spec:
   project: default
 
+  # ----------------------------------------------------------
+  # Git repository monitored by Argo CD
+  # ----------------------------------------------------------
   source:
     repoURL: https://github.com/christianRibig5/python-gitops-workflow-demo.git
     targetRevision: main
     path: monitoring
 
+  # ----------------------------------------------------------
+  # Kubernetes deployment destination
+  # ----------------------------------------------------------
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
 
+  # ----------------------------------------------------------
+  # GitOps synchronization policy
+  # ----------------------------------------------------------
   syncPolicy:
     automated:
       selfHeal: true
 
-      # Intentionally disabled while Prometheus and Grafana use
-      # persistent EBS-backed PVCs.
+      # Keep pruning disabled for the monitoring stack.
+      # Prometheus and Grafana use persistent EBS-backed PVCs,
+      # so destructive cleanup should remain deliberate.
       prune: false
 
     syncOptions:
-      # The repository also contains namespace.yaml, but this protects
-      # the initial deployment if the namespace does not exist yet.
+      # Create the monitoring namespace if it does not yet exist.
       - CreateNamespace=true
 
-      # Only apply resources whose desired state has changed.
+      # Apply only resources whose desired state differs from
+      # the current cluster state.
       - ApplyOutOfSyncOnly=true
 
       # Validate manifests against the Kubernetes API.
       - Validate=true
 
+    # Retry temporary synchronization failures.
     retry:
       limit: 5
       backoff:
@@ -47,4 +59,5 @@ spec:
         factor: 2
         maxDuration: 3m
 
+  # Retain previous deployment revisions for rollback/history.
   revisionHistoryLimit: 10

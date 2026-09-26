@@ -1,0 +1,30 @@
+---
+# ============================================================
+# Local Ansible Inventory
+#
+# Ansible runs locally and orchestrates Terraform, AWS CLI,
+# kubectl, Helm, Argo CD, and project infrastructure.
+# ============================================================
+
+all:
+  hosts:
+    localhost:
+      ansible_connection: local
+      ansible_python_interpreter: "{{ ansible_playbook_python }}"
+
+# For the platform other than my local machine as specified in the inventory.ini
+# Linux server over SSH:
+# [linux_servers]
+# server.example.com ansible_connection=ssh ansible_user=ubuntu
+
+# Windows server over WinRM:
+# [windows_servers]
+# windows.example.com ansible_connection=winrm ansible_user=Administrator
+
+# Windows server over PowerShell Remoting:
+# [windows_psrp]
+# windows.example.com ansible_connection=psrp ansible_user=Administrator
+
+# Network device; requires the appropriate Ansible collection and device settings:
+# [network_devices]
+# switch.example.com ansible_connection=ansible.netcommon.network_cli

@@ -1,0 +1,82 @@
+---
+# ============================================================
+# Preflight Role
+#
+# Purpose:
+# Validate the local workstation and AWS environment before
+# Ansible makes any project infrastructure changes.
+#
+# This role does NOT create or modify infrastructure.
+# ============================================================
+
+# ------------------------------------------------------------
+# 1. Check required CLI tools
+# ------------------------------------------------------------
+
+- name: Check required CLI tools
+  ansible.builtin.command:
+    cmd: "which {{ item }}"
+  loop:
+    - aws
+    - terraform
+    - kubectl
+    - helm
+  register: required_cli_tools
+  changed_when: false
+
+# ------------------------------------------------------------
+# 2. Verify AWS authentication
+# ------------------------------------------------------------
+
+- name: Verify AWS authentication
+  ansible.builtin.command:
+    cmd: "aws sts get-caller-identity --profile {{ aws_profile }}"
+  register: aws_identity
+  changed_when: false
+  no_log: false
+
+# ------------------------------------------------------------
+# 3. Verify shared EKS cluster exists
+#
+# The EKS cluster belongs to the reusable aws-lab.
+# This project consumes the cluster but does not create it.
+# ------------------------------------------------------------
+
+- name: Verify shared EKS cluster exists
+  ansible.builtin.command:
+    cmd: >-
+      aws eks describe-cluster
+      --name {{ eks_cluster_name }}
+      --region {{ aws_region }}
+      --profile {{ aws_profile }}
+      --query cluster.status
+      --output text
+  register: eks_cluster_status
+  changed_when: false
+
+# ------------------------------------------------------------
+# 4. Require EKS cluster to be ACTIVE
+# ------------------------------------------------------------
+
+- name: Validate EKS cluster status
+  ansible.builtin.assert:
+    that:
+      - eks_cluster_status.stdout | trim == "ACTIVE"
+    fail_msg: >-
+      Shared EKS cluster {{ eks_cluster_name }} is not ACTIVE.
+      Bring up the reusable AWS lab before running this project.
+    success_msg: >-
+      Shared EKS cluster {{ eks_cluster_name }} is ACTIVE.
+
+# ------------------------------------------------------------
+# 5. Display successful preflight summary
+# ------------------------------------------------------------
+
+- name: Display preflight summary
+  ansible.builtin.debug:
+    msg:
+      - "Preflight checks passed."
+      - "AWS profile: {{ aws_profile }}"
+      - "AWS region: {{ aws_region }}"
+      - "EKS cluster: {{ eks_cluster_name }}"
+      - "EKS status: {{ eks_cluster_status.stdout | trim }}"

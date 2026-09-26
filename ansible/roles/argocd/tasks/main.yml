@@ -1,89 +1,139 @@
-- name: Verify AWS authentication
-  ansible.builtin.command:
-    cmd: aws sts get-caller-identity --profile {{ aws_profile }}
-  changed_when: false
+---
+# ============================================================
+# Argo CD Role
+#
+# Purpose:
+# Install and configure Argo CD on the shared EKS cluster,
+# then register the project's GitOps applications.
+#
+# Dependencies:
+# - Preflight checks completed
+# - kubeconfig configured
+# - EKS cluster reachable
+# - Project Terraform completed
+# ============================================================
 
-- name: Update EKS kubeconfig
-  ansible.builtin.command:
-    cmd: >
-      aws eks update-kubeconfig
-      --region {{ aws_region }}
-      --name {{ eks_cluster_name }}
-      --profile {{ aws_profile }}
-  changed_when: true
+# ------------------------------------------------------------
+# Namespace
+# ------------------------------------------------------------
 
-- name: Confirm access to EKS worker nodes
-  ansible.builtin.command:
-    cmd: kubectl get nodes
-  register: eks_nodes
-  changed_when: false
-
-- name: Display EKS nodes
-  ansible.builtin.debug:
-    var: eks_nodes.stdout_lines
-
-- name: Create Argo CD namespace
+- name: Ensure Argo CD namespace exists
   kubernetes.core.k8s:
-    name: "{{ argocd_namespace }}"
     api_version: v1
     kind: Namespace
+    name: "{{ argocd_namespace }}"
     state: present
+
+# ------------------------------------------------------------
+# Install Argo CD
+# ------------------------------------------------------------
 
 - name: Install Argo CD
   ansible.builtin.command:
-    cmd: >
-      kubectl apply
-      --namespace {{ argocd_namespace }}
-      --server-side
-      --force-conflicts
-      --filename
-      https://raw.githubusercontent.com/argoproj/argo-cd/{{ argocd_version }}/manifests/install.yaml
+    argv:
+      - kubectl
+      - apply
+      - --namespace
+      - "{{ argocd_namespace }}"
+      - --server-side
+      - --force-conflicts
+      - --filename
+      - "https://raw.githubusercontent.com/argoproj/argo-cd/{{ argocd_version }}/manifests/install.yaml"
   register: argocd_install
   changed_when: >
     'created' in argocd_install.stdout or
     'configured' in argocd_install.stdout or
     'serverside-applied' in argocd_install.stdout
 
-- name: Wait for Argo CD to become ready
+# ------------------------------------------------------------
+# CRD Readiness
+# ------------------------------------------------------------
+
+- name: Wait for Argo CD Application CRD
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - wait
+      - --for=condition=Established
+      - crd/applications.argoproj.io
+      - --timeout=120s
+  changed_when: false
+
+# ------------------------------------------------------------
+# Argo CD Workload Readiness
+# ------------------------------------------------------------
+
+- name: Wait for Argo CD server
   ansible.builtin.command:
     argv:
       - kubectl
       - rollout
       - status
       - deployment/argocd-server
-      - --namespace={{ argocd_namespace }}
+      - "--namespace={{ argocd_namespace }}"
       - --timeout=300s
   changed_when: false
 
-- name: Create Argo CD dashboard ingress
+- name: Wait for Argo CD repo server
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - rollout
+      - status
+      - deployment/argocd-repo-server
+      - "--namespace={{ argocd_namespace }}"
+      - --timeout=300s
+  changed_when: false
+
+- name: Wait for Argo CD application controller
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - rollout
+      - status
+      - statefulset/argocd-application-controller
+      - "--namespace={{ argocd_namespace }}"
+      - --timeout=300s
+  changed_when: false
+
+# ------------------------------------------------------------
+# Dashboard Ingress
+# ------------------------------------------------------------
+
+- name: Configure Argo CD dashboard ingress
   kubernetes.core.k8s:
     state: present
-    src: "{{ playbook_dir }}/../argocd/argocd-ingress.yaml"
+    src: "{{ argocd_ingress_manifest }}"
 
-- name: Register application with Argo CD
+# ------------------------------------------------------------
+# Register GitOps Applications
+# ------------------------------------------------------------
+
+- name: Register monitoring application with Argo CD
   kubernetes.core.k8s:
     state: present
-    namespace: "{{ argocd_namespace }}"
-    src: "{{ playbook_dir }}/../argocd/application.yaml"
+    src: "{{ argocd_monitoring_application_manifest }}"
 
-# - name: Retrieve initial Argo CD password
-#   ansible.builtin.command:
-#     cmd: >
-#       kubectl get secret argocd-initial-admin-secret
-#       --namespace {{ argocd_namespace }}
-#       --output jsonpath='{.data.password}'
-#   register: argocd_password_encoded
-#   changed_when: false
-#   no_log: true
+- name: Register Python application with Argo CD
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ argocd_application_manifest }}"
 
-# - name: Decode Argo CD password
-#   ansible.builtin.set_fact:
-#     argocd_password: "{{ argocd_password_encoded.stdout | b64decode }}"
-#   no_log: true
+# ------------------------------------------------------------
+# Verification
+# ------------------------------------------------------------
 
-- name: Display Argo CD dashboard information
+- name: Get registered Argo CD applications
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - get
+      - applications
+      - --namespace
+      - "{{ argocd_namespace }}"
+  register: argocd_applications
+  changed_when: false
+
+- name: Display registered Argo CD applications
   ansible.builtin.debug:
-    msg:
-      - "Dashboard: https://{{ argocd_hostname }}"
-      - "Username: admin"
-      - "To retrieve the initial password locally: argocd admin initial-password -n {{ argocd_namespace }}"
+    var: argocd_applications.stdout_lines

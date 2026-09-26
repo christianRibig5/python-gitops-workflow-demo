@@ -1,6 +1,73 @@
-aws_profile: dev-admin
+---
+# ============================================================
+# Python GitOps Workflow Demo
+# Project-level Ansible variables
+# ============================================================
+
+# ------------------------------------------------------------
+# Project
+# ------------------------------------------------------------
+
+project_name: python-gitops-workflow-demo
+
+# Resolve repository root from the location of this variables file.
+project_root: "{{ playbook_dir }}/../.."
+
+# ------------------------------------------------------------
+# AWS
+# ------------------------------------------------------------
+
 aws_region: ca-central-1
+aws_profile: dev-admin
+
+# Shared EKS cluster created by the reusable aws-lab.
 eks_cluster_name: retail-dev-eksjalexsol
+
+# ------------------------------------------------------------
+# Kubernetes
+# ------------------------------------------------------------
+
+monitoring_namespace: monitoring
 argocd_namespace: argocd
-argocd_version: v3.4.8
-argocd_hostname: argocd.vgc247.com
+
+# ------------------------------------------------------------
+# Argo CD
+# ------------------------------------------------------------
+
+# Pin Argo CD for reproducible project deployments.
+argocd_version: v3.5.3
+
+# Project manifests consumed by the Argo CD Ansible role.
+argocd_ingress_manifest: "{{ project_root }}/argocd/argocd-ingress.yaml"
+
+argocd_monitoring_application_manifest: "{{ project_root }}/argocd/monitoring-application.yaml"
+
+argocd_application_manifest: "{{ project_root }}/argocd/application.yaml"
+
+# ------------------------------------------------------------
+# Project-specific Terraform
+#
+# IMPORTANT:
+# Order matters because later components consume resources
+# created by earlier components.
+# ------------------------------------------------------------
+
+terraform_components:
+  # 1. Create the customer-managed KMS key first.
+  - name: monitoring-kms
+    path: "{{ project_root }}/terraform/monitoring-kms"
+
+  # 2. Create Secrets Manager containers encrypted by the KMS key.
+  - name: grafana-admin-secret
+    path: "{{ project_root }}/terraform/grafana-admin-secret"
+
+  - name: alertmanager-zoho-secret
+    path: "{{ project_root }}/terraform/alertmanager-zoho-secret"
+
+  # 3. Create IAM roles/policies and EKS Pod Identity associations.
+  # These depend on the corresponding Secrets Manager resources.
+  - name: grafana-pod-identity
+    path: "{{ project_root }}/terraform/pod-identity-associations/grafana-pod-identity-association"
+
+  - name: alertmanager-pod-identity
+    path: "{{ project_root }}/terraform/pod-identity-associations/alertmanager-pod-identity-association"

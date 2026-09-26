@@ -41,14 +41,20 @@ RUN python -m pip install \
 
 COPY . .
 
-# Create non-root application user
-RUN groupadd --system appgroup \
-    && useradd --system --gid appgroup --create-home appuser
+# Create deterministic non-root application user/group.
+# Numeric UID/GID allows Kubernetes to verify runAsNonRoot.
+RUN groupadd --gid 10001 appgroup \
+    && useradd \
+    --uid 10001 \
+    --gid 10001 \
+    --create-home \
+    --shell /usr/sbin/nologin \
+    appuser
 
-# Make sure application files belong to the application user
-RUN chown -R appuser:appgroup /app
+# Application files are owned by the non-root runtime identity.
+RUN chown -R 10001:10001 /app
 
-USER appuser
+USER 10001:10001
 
 EXPOSE 5000
 

@@ -14,7 +14,7 @@ terraform {
   }
 
   backend "s3" {
-    bucket       = "tfstate-dev-ca-central-1-mr67svo6"
+    bucket       = "tfstate-dev-ca-central-1-i1zfl3al"
     key          = "pod-identity/grafana/dev/terraform.tfstate"
     region       = "ca-central-1"
     encrypt      = true

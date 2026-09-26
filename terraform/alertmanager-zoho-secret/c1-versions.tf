@@ -11,7 +11,7 @@ terraform {
   # Remote Backend
   backend "s3" {
     bucket       = "tfstate-dev-ca-central-1-i1zfl3al"
-    key          = "secret/alertmanger-zoho-smtp/dev/terraform.tfstate"
+    key          = "secret/alertmanager-zoho-smtp/dev/terraform.tfstate"
     region       = "ca-central-1" #variable cant be applied
     encrypt      = true
     use_lockfile = true

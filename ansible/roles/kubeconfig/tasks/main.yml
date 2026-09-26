@@ -1,0 +1,87 @@
+---
+# ============================================================
+# Kubeconfig Role
+#
+# Purpose:
+# Configure kubectl access to the shared EKS cluster and
+# verify Kubernetes API connectivity.
+#
+# The EKS cluster is owned by the reusable aws-lab.
+# This role only configures local access to that cluster.
+# ============================================================
+
+# ------------------------------------------------------------
+# 1. Configure kubeconfig for the shared EKS cluster
+# ------------------------------------------------------------
+
+- name: Configure kubeconfig for shared EKS cluster
+  ansible.builtin.command:
+    cmd: >-
+      aws eks update-kubeconfig
+      --name {{ eks_cluster_name }}
+      --region {{ aws_region }}
+      --profile {{ aws_profile }}
+  register: kubeconfig_update
+  changed_when: "'Updated context' in kubeconfig_update.stdout or 'Added new context' in kubeconfig_update.stdout"
+
+# ------------------------------------------------------------
+# 2. Get the active kubectl context
+# ------------------------------------------------------------
+
+- name: Get current kubectl context
+  ansible.builtin.command:
+    cmd: kubectl config current-context
+  register: kubectl_context
+  changed_when: false
+
+# ------------------------------------------------------------
+# 3. Verify that the context points to the expected EKS cluster
+# ------------------------------------------------------------
+
+- name: Validate kubectl context
+  ansible.builtin.assert:
+    that:
+      - eks_cluster_name in kubectl_context.stdout
+    fail_msg: >-
+      kubectl is not configured for the expected EKS cluster
+      {{ eks_cluster_name }}.
+      Current context: {{ kubectl_context.stdout | trim }}
+    success_msg: >-
+      kubectl is configured for the expected EKS cluster
+      {{ eks_cluster_name }}.
+
+# ------------------------------------------------------------
+# 4. Verify Kubernetes API connectivity
+# ------------------------------------------------------------
+
+- name: Verify Kubernetes API connectivity
+  ansible.builtin.command:
+    cmd: kubectl get nodes -o name
+  register: kubernetes_nodes
+  changed_when: false
+
+# ------------------------------------------------------------
+# 5. Require at least one Kubernetes node
+# ------------------------------------------------------------
+
+- name: Validate Kubernetes nodes
+  ansible.builtin.assert:
+    that:
+      - kubernetes_nodes.stdout_lines | length > 0
+    fail_msg: >-
+      Kubernetes API is reachable, but no worker nodes were
+      returned for cluster {{ eks_cluster_name }}.
+    success_msg: >-
+      Kubernetes API is reachable and worker nodes are available.
+
+# ------------------------------------------------------------
+# 6. Display kubeconfig summary
+# ------------------------------------------------------------
+
+- name: Display kubeconfig summary
+  ansible.builtin.debug:
+    msg:
+      - "Kubeconfig validation passed."
+      - "Cluster: {{ eks_cluster_name }}"
+      - "Context: {{ kubectl_context.stdout | trim }}"
+      - "Worker nodes: {{ kubernetes_nodes.stdout_lines | length }}"

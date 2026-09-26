@@ -1,0 +1,25 @@
+---
+# ============================================================
+# Terraform Role
+#
+# Orchestrates project-specific Terraform components in the
+# dependency order defined by terraform_components.
+# ============================================================
+
+- name: Validate Terraform component list
+  ansible.builtin.assert:
+    that:
+      - terraform_components is defined
+      - terraform_components | length > 0
+    fail_msg: "No Terraform components are configured."
+    success_msg: >-
+      {{ terraform_components | length }} Terraform components
+      are configured for deployment.
+
+- name: Deploy Terraform components in dependency order
+  ansible.builtin.include_tasks:
+    file: apply-component.yml
+  loop: "{{ terraform_components }}"
+  loop_control:
+    loop_var: terraform_component
+    label: "{{ terraform_component.name }}"

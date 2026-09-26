@@ -1,8 +1,10 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
+
 metadata:
   name: python-gitops-demo
   namespace: argocd
+
   labels:
     app.kubernetes.io/name: python-gitops-demo
     app.kubernetes.io/part-of: platform
@@ -10,17 +12,28 @@ metadata:
 
   finalizers:
     - resources-finalizer.argocd.argoproj.io
+
 spec:
   project: default
 
+  # ----------------------------------------------------------
+  # Git repository monitored by Argo CD
+  # ----------------------------------------------------------
   source:
     repoURL: https://github.com/christianRibig5/python-gitops-workflow-demo.git
     targetRevision: main
     path: k8s
 
+  # ----------------------------------------------------------
+  # Kubernetes deployment destination
+  # ----------------------------------------------------------
   destination:
     server: https://kubernetes.default.svc
     namespace: python-gitops
+
+  # ----------------------------------------------------------
+  # GitOps synchronization policy
+  # ----------------------------------------------------------
   syncPolicy:
     automated:
       prune: true

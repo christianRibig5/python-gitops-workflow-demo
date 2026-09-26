@@ -1,0 +1,104 @@
+---
+# ============================================================
+# Apply One Terraform Component
+#
+# Execution:
+#   init -> validate -> plan -> apply saved plan
+#
+# terraform plan -detailed-exitcode:
+#   0 = no changes
+#   1 = error
+#   2 = changes detected
+# ============================================================
+
+# ------------------------------------------------------------
+# Validate component directory
+# ------------------------------------------------------------
+
+- name: "Check Terraform component directory | {{ terraform_component.name }}"
+  ansible.builtin.stat:
+    path: "{{ terraform_component.path }}"
+  register: terraform_component_directory
+
+- name: "Validate Terraform component directory | {{ terraform_component.name }}"
+  ansible.builtin.assert:
+    that:
+      - terraform_component_directory.stat.exists
+      - terraform_component_directory.stat.isdir
+    fail_msg: >-
+      Terraform component directory does not exist:
+      {{ terraform_component.path }}
+
+# ------------------------------------------------------------
+# Terraform init
+# ------------------------------------------------------------
+
+- name: "Terraform init | {{ terraform_component.name }}"
+  ansible.builtin.command:
+    cmd: terraform init -input=false
+    chdir: "{{ terraform_component.path }}"
+  register: terraform_init
+  changed_when: false
+
+# ------------------------------------------------------------
+# Terraform validate
+# ------------------------------------------------------------
+
+- name: "Terraform validate | {{ terraform_component.name }}"
+  ansible.builtin.command:
+    cmd: terraform validate
+    chdir: "{{ terraform_component.path }}"
+  register: terraform_validate
+  changed_when: false
+
+# ------------------------------------------------------------
+# Terraform plan
+#
+# Save the plan so that the exact reviewed plan is applied.
+# ------------------------------------------------------------
+
+- name: "Terraform plan | {{ terraform_component.name }}"
+  ansible.builtin.command:
+    cmd: terraform plan -input=false -detailed-exitcode -out=tfplan
+    chdir: "{{ terraform_component.path }}"
+  register: terraform_plan
+  changed_when: terraform_plan.rc == 2
+  failed_when: terraform_plan.rc not in [0, 2]
+
+# ------------------------------------------------------------
+# Display plan status
+# ------------------------------------------------------------
+
+- name: "Display Terraform plan status | {{ terraform_component.name }}"
+  ansible.builtin.debug:
+    msg: >-
+      {{
+        'Terraform detected infrastructure changes.'
+        if terraform_plan.rc == 2
+        else
+        'Terraform infrastructure is already up to date.'
+      }}
+
+# ------------------------------------------------------------
+# Terraform apply
+#
+# Only apply when the saved plan contains changes.
+# ------------------------------------------------------------
+
+- name: "Terraform apply | {{ terraform_component.name }}"
+  ansible.builtin.command:
+    cmd: terraform apply -input=false -auto-approve tfplan
+    chdir: "{{ terraform_component.path }}"
+  register: terraform_apply
+  when: terraform_plan.rc == 2
+  changed_when: true
+
+# ------------------------------------------------------------
+# Clean local Terraform plan artifact
+# ------------------------------------------------------------
+
+- name: "Remove Terraform plan file | {{ terraform_component.name }}"
+  ansible.builtin.file:
+    path: "{{ terraform_component.path }}/tfplan"
+    state: absent
+  changed_when: false
