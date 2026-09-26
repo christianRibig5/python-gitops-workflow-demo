@@ -8,6 +8,7 @@ resources:
   - rbac.yaml
   - storage-class.yaml
   - persistent-volume-claim.yaml
+  - secret-provider-class.yaml
   - deployment.yaml
   - service.yaml
   - ingress.yaml

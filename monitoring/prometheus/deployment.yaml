@@ -90,6 +90,8 @@ spec:
             - name: data
               mountPath: /prometheus
 
+            # Grafana Cloud token mounted from AWS Secrets Manager
+            # through Secrets Store CSI + ASCP.
             - name: grafana-cloud-credentials
               mountPath: /etc/prometheus/grafana-cloud
               readOnly: true
@@ -107,9 +109,11 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: prometheus-data
+
+        # AWS Secrets Manager -> CSI -> Prometheus filesystem.
         - name: grafana-cloud-credentials
-          secret:
-            secretName: grafana-cloud-credentials
-            items:
-              - key: password
-                path: password
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: prometheus-grafana-cloud-token
