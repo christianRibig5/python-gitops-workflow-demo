@@ -1,0 +1,712 @@
+---
+# ============================================================
+# Python GitOps Workflow Demo - Project Down
+#
+# Purpose:
+# Shut down ONLY the Python GitOps project while preserving
+# the reusable shared AWS lab (VPC, EKS, nodes and add-ons).
+#
+# Preserved:
+#   - Shared VPC / NAT / EKS
+#   - Shared EKS add-ons
+#   - Argo CD installation
+#   - Monitoring KMS key
+#   - Secrets Manager secret containers and values
+#   - Terraform remote state
+#
+# Removed:
+#   - Project Argo CD Applications
+#   - Python application workloads
+#   - Monitoring workloads
+#   - Project Ingresses / ALBs
+#   - Project Pod Identity associations / IAM resources
+# ============================================================
+
+- name: Python GitOps Project - Shut Down
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  # ----------------------------------------------------------
+  # Load centralized project variables
+  # ----------------------------------------------------------
+  vars_files:
+    - "{{ playbook_dir }}/../group_vars/all.yml"
+
+  vars:
+    # --------------------------------------------------------
+    # Argo CD Applications owned by this project
+    # --------------------------------------------------------
+    project_argocd_applications:
+      - monitoring
+      - python-gitops-demo
+
+    # --------------------------------------------------------
+    # Ephemeral project Terraform components
+    #
+    # IMPORTANT:
+    # Destroy in reverse dependency order.
+    #
+    # KMS and Secrets Manager are intentionally NOT included.
+    # Their values must survive project-down/project-up cycles.
+    # --------------------------------------------------------
+    project_terraform_destroy_components:
+      - name: prometheus-pod-identity
+        path: "{{ project_root }}/terraform/pod-identity-associations/prometheus-pod-identity-association"
+
+      - name: alertmanager-pod-identity
+        path: "{{ project_root }}/terraform/pod-identity-associations/alertmanager-pod-identity-association"
+
+      - name: grafana-pod-identity
+        path: "{{ project_root }}/terraform/pod-identity-associations/grafana-pod-identity-association"
+
+  tasks:
+    # ========================================================
+    # 1. PREFLIGHT
+    # ========================================================
+
+    - name: Display project shutdown scope
+      ansible.builtin.debug:
+        msg:
+          - "============================================================"
+          - " Python GitOps Project - PROJECT DOWN"
+          - "============================================================"
+          - "Project: {{ project_name }}"
+          - "Cluster: {{ eks_cluster_name }}"
+          - ""
+          - "This removes PROJECT workloads only."
+          - ""
+          - "PRESERVED:"
+          - "  - Shared VPC / NAT"
+          - "  - EKS cluster and worker nodes"
+          - "  - Shared EKS add-ons"
+          - "  - Argo CD installation"
+          - "  - Monitoring KMS key"
+          - "  - Secrets Manager secrets and values"
+          - "  - Terraform remote state"
+          - "============================================================"
+
+    # --------------------------------------------------------
+    # Verify AWS authentication before making any changes.
+    # --------------------------------------------------------
+
+    - name: Verify AWS authentication
+      ansible.builtin.command:
+        argv:
+          - aws
+          - sts
+          - get-caller-identity
+          - --profile
+          - "{{ aws_profile }}"
+          - --region
+          - "{{ aws_region }}"
+      changed_when: false
+
+    # --------------------------------------------------------
+    # Verify that the shared EKS platform exists.
+    #
+    # project-down is intentionally NOT responsible for
+    # destroying the shared EKS platform.
+    # --------------------------------------------------------
+
+    - name: Check whether shared EKS cluster exists
+      ansible.builtin.command:
+        argv:
+          - aws
+          - eks
+          - describe-cluster
+          - --name
+          - "{{ eks_cluster_name }}"
+          - --region
+          - "{{ aws_region }}"
+          - --profile
+          - "{{ aws_profile }}"
+          - --query
+          - cluster.status
+          - --output
+          - text
+      register: eks_status
+      changed_when: false
+      failed_when: false
+
+    - name: Stop if shared EKS cluster is unavailable
+      ansible.builtin.fail:
+        msg: >-
+          Shared EKS cluster {{ eks_cluster_name }} is not ACTIVE.
+          project-down is designed to remove project resources
+          while preserving the shared lab.
+      when:
+        - eks_status.rc != 0 or eks_status.stdout | trim != "ACTIVE"
+
+    # --------------------------------------------------------
+    # Configure kubectl.
+    # --------------------------------------------------------
+
+    - name: Configure kubeconfig for shared EKS cluster
+      ansible.builtin.command:
+        argv:
+          - aws
+          - eks
+          - update-kubeconfig
+          - --name
+          - "{{ eks_cluster_name }}"
+          - --region
+          - "{{ aws_region }}"
+          - --profile
+          - "{{ aws_profile }}"
+      changed_when: false
+
+    - name: Verify Kubernetes API connectivity
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - get
+          - nodes
+      changed_when: false
+
+    # ========================================================
+    # 2. CONFIRMATION
+    # ========================================================
+
+    - name: Confirm project shutdown
+      ansible.builtin.pause:
+        prompt: |
+
+          ============================================================
+          PROJECT SHUTDOWN CONFIRMATION
+          ============================================================
+
+          This will remove the Python GitOps project's runtime
+          resources from the shared EKS cluster.
+
+          It WILL remove:
+            - Python application workloads
+            - Monitoring workloads
+            - Project Ingresses / ALBs
+            - Project Argo CD Applications
+            - Project Pod Identity resources
+
+          It WILL NOT remove:
+            - VPC
+            - NAT Gateway
+            - EKS
+            - Worker nodes
+            - Shared EKS add-ons
+            - Argo CD installation
+            - KMS key
+            - Secrets Manager credentials
+            - Terraform remote state
+
+          The shared AWS lab WILL REMAIN RUNNING.
+
+          Type PROJECT-DOWN to continue
+      register: project_down_confirmation
+
+    - name: Stop unless project shutdown is confirmed
+      ansible.builtin.fail:
+        msg: "Project shutdown cancelled."
+      when:
+        - project_down_confirmation.user_input != "PROJECT-DOWN"
+
+    # ========================================================
+    # 3. STOP ARGO CD RECONCILIATION
+    #
+    # Remove the Application CRs before deleting workloads.
+    #
+    # This prevents Argo CD selfHeal from recreating resources
+    # while project-down is intentionally removing them.
+    #
+    # Finalizers are cleared because workloads are explicitly
+    # deleted by this playbook.
+    #
+    # The Argo CD installation itself remains running.
+    # ========================================================
+
+    - name: Check project Argo CD Applications
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - get
+          - application
+          - "{{ item }}"
+          - -n
+          - "{{ argocd_namespace }}"
+      loop: "{{ project_argocd_applications }}"
+      register: argocd_app_checks
+      changed_when: false
+      failed_when: false
+
+    - name: Remove Argo CD Application finalizers
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - patch
+          - application
+          - "{{ item.item }}"
+          - -n
+          - "{{ argocd_namespace }}"
+          - --type=merge
+          - -p
+          - '{"metadata":{"finalizers":[]}}'
+      loop: "{{ argocd_app_checks.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when:
+        - item.rc == 0
+      changed_when: true
+
+    - name: Delete project Argo CD Applications
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - delete
+          - application
+          - "{{ item.item }}"
+          - -n
+          - "{{ argocd_namespace }}"
+          - --ignore-not-found=true
+      loop: "{{ argocd_app_checks.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when:
+        - item.rc == 0
+      changed_when: true
+
+    # ========================================================
+    # 4. REMOVE PROJECT KUBERNETES RESOURCES
+    #
+    # IMPORTANT:
+    #
+    # We do NOT use:
+    #
+    #   kubectl delete ingress --all
+    #
+    # because another project may eventually share this EKS
+    # cluster and namespace.
+    #
+    # Each project must delete only resources that it owns.
+    # ========================================================
+
+    # --------------------------------------------------------
+    # Delete Python application ingress first.
+    #
+    # This gives AWS Load Balancer Controller the opportunity
+    # to remove the associated AWS ALB before the remaining
+    # application resources are deleted.
+    # --------------------------------------------------------
+
+    - name: Delete Python application Ingress
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - delete
+          - -f
+          - "{{ project_root }}/k8s/app-ingress.yaml"
+          - --ignore-not-found=true
+          - --wait=true
+          - --timeout=180s
+      register: python_ingress_delete
+      changed_when: true
+      failed_when: false
+
+    # --------------------------------------------------------
+    # Give AWS Load Balancer Controller a short opportunity
+    # to complete cloud-side cleanup.
+    # --------------------------------------------------------
+
+    - name: Wait briefly for Python ingress cleanup
+      ansible.builtin.pause:
+        seconds: 15
+
+    # --------------------------------------------------------
+    # Delete Python application manifests.
+    #
+    # This removes only resources defined by this project's
+    # k8s directory.
+    # --------------------------------------------------------
+
+    - name: Remove Python application manifests
+      ansible.builtin.command:
+        cmd: >-
+          kubectl delete -f "{{ project_root }}/k8s"
+          --ignore-not-found=true
+          --wait=true
+          --timeout=180s
+      register: python_delete
+      changed_when: >
+        'deleted' in python_delete.stdout
+      failed_when: false
+
+    # --------------------------------------------------------
+    # Delete monitoring stack.
+    #
+    # monitoring/ is the GitOps source of truth for:
+    #   - Prometheus
+    #   - Grafana
+    #   - Alertmanager
+    #   - Loki / other monitoring resources present there
+    #
+    # KMS and AWS Secrets Manager are NOT Kubernetes resources
+    # and therefore remain preserved.
+    # --------------------------------------------------------
+
+    - name: Remove monitoring workloads
+      ansible.builtin.command:
+        cmd: >-
+          kubectl delete -k "{{ project_root }}/monitoring"
+          --ignore-not-found=true
+          --wait=true
+          --timeout=180s
+      register: monitoring_delete
+      changed_when: >
+        'deleted' in monitoring_delete.stdout
+      failed_when: false
+
+    # ========================================================
+    # 5. WAIT FOR PROJECT WORKLOADS TO DISAPPEAR
+    # ========================================================
+
+    - name: Wait for monitoring Pods to terminate
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - wait
+          - --for=delete
+          - pod
+          - --all
+          - -n
+          - "{{ monitoring_namespace }}"
+          - --timeout=180s
+      register: monitoring_wait
+      changed_when: false
+      failed_when: false
+
+    # --------------------------------------------------------
+    # Verify Python application pods are no longer present.
+    #
+    # This is informational here; final validation occurs
+    # later.
+    # --------------------------------------------------------
+
+    - name: Check remaining Python application Pods
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - get
+          - pods
+          - -n
+          - default
+          - -l
+          - app=python-gitops-demo
+          - --no-headers
+      register: remaining_python_pods
+      changed_when: false
+      failed_when: false
+
+    # ========================================================
+    # 6. DESTROY EPHEMERAL PROJECT TERRAFORM
+    #
+    # Workloads are removed BEFORE their Pod Identity
+    # associations and IAM roles are destroyed.
+    #
+    # Destroy order:
+    #
+    #   Prometheus Pod Identity
+    #        ↓
+    #   Alertmanager Pod Identity
+    #        ↓
+    #   Grafana Pod Identity
+    #
+    # PRESERVED:
+    #
+    #   monitoring-kms
+    #   grafana-admin-secret
+    #   alertmanager-zoho-secret
+    #   prometheus-grafana-cloud-secret
+    #
+    # Therefore project-up can reuse the existing credentials.
+    # ========================================================
+
+    - name: Check project Terraform component directories
+      ansible.builtin.stat:
+        path: "{{ item.path }}"
+      loop: "{{ project_terraform_destroy_components }}"
+      loop_control:
+        label: "{{ item.name }}"
+      register: destroy_component_dirs
+
+    - name: Validate project Terraform component directories
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.isdir
+        fail_msg: >-
+          Terraform component directory missing:
+          {{ item.item.path }}
+      loop: "{{ destroy_component_dirs.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+
+    # --------------------------------------------------------
+    # Initialize each component against its existing remote
+    # Terraform backend before destruction.
+    # --------------------------------------------------------
+
+    - name: Terraform init for destroy components
+      ansible.builtin.command:
+        argv:
+          - terraform
+          - init
+          - -input=false
+      args:
+        chdir: "{{ item.path }}"
+      loop: "{{ project_terraform_destroy_components }}"
+      loop_control:
+        label: "{{ item.name }}"
+      changed_when: false
+
+    # --------------------------------------------------------
+    # Destroy only project Pod Identity Terraform components.
+    #
+    # Terraform state remains in the remote S3 backend.
+    # --------------------------------------------------------
+
+    - name: Destroy project Pod Identity components
+      ansible.builtin.command:
+        argv:
+          - terraform
+          - destroy
+          - -auto-approve
+          - -input=false
+      args:
+        chdir: "{{ item.path }}"
+      loop: "{{ project_terraform_destroy_components }}"
+      loop_control:
+        label: "{{ item.name }}"
+      register: terraform_destroy_results
+      changed_when: true
+
+    # ========================================================
+    # 7. VALIDATE PROJECT OFF / SHARED LAB ON
+    # ========================================================
+
+    # --------------------------------------------------------
+    # Argo CD Applications should no longer exist.
+    # --------------------------------------------------------
+
+    - name: Verify project Argo CD Applications are gone
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - get
+          - application
+          - "{{ item }}"
+          - -n
+          - "{{ argocd_namespace }}"
+      loop: "{{ project_argocd_applications }}"
+      register: final_argocd_apps
+      changed_when: false
+      failed_when: false
+
+    # --------------------------------------------------------
+    # Monitoring Pods should be gone.
+    # --------------------------------------------------------
+
+    - name: Verify no monitoring Pods remain
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - get
+          - pods
+          - -n
+          - "{{ monitoring_namespace }}"
+          - --no-headers
+      register: remaining_monitoring_pods
+      changed_when: false
+      failed_when: false
+
+    # --------------------------------------------------------
+    # Python application Pods should be gone.
+    # --------------------------------------------------------
+
+    - name: Verify no Python application Pods remain
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - get
+          - pods
+          - -n
+          - default
+          - -l
+          - app=python-gitops-demo
+          - --no-headers
+      register: final_python_pods
+      changed_when: false
+      failed_when: false
+
+    # --------------------------------------------------------
+    # Shared EKS MUST still exist and remain ACTIVE.
+    # --------------------------------------------------------
+
+    - name: Verify shared EKS cluster remains ACTIVE
+      ansible.builtin.command:
+        argv:
+          - aws
+          - eks
+          - describe-cluster
+          - --name
+          - "{{ eks_cluster_name }}"
+          - --region
+          - "{{ aws_region }}"
+          - --profile
+          - "{{ aws_profile }}"
+          - --query
+          - cluster.status
+          - --output
+          - text
+      register: final_eks_status
+      changed_when: false
+
+    # --------------------------------------------------------
+    # IMPORTANT:
+    #
+    # This uses shell instead of command because the pipeline
+    # requires shell interpretation.
+    # --------------------------------------------------------
+
+    - name: Count remaining Ready worker nodes
+      ansible.builtin.shell:
+        cmd: >-
+          kubectl get nodes
+          --no-headers
+          | grep -c ' Ready'
+      register: ready_node_count
+      changed_when: false
+      failed_when: false
+
+    # --------------------------------------------------------
+    # Verify the durable AWS secrets still exist.
+    #
+    # We intentionally check metadata only. Secret values are
+    # NEVER printed.
+    # --------------------------------------------------------
+
+    - name: Verify Grafana admin secret is preserved
+      ansible.builtin.command:
+        argv:
+          - aws
+          - secretsmanager
+          - describe-secret
+          - --secret-id
+          - dev/monitoring/grafana/admin-password
+          - --region
+          - "{{ aws_region }}"
+          - --profile
+          - "{{ aws_profile }}"
+      register: grafana_secret_preserved
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: Verify Alertmanager Zoho secret is preserved
+      ansible.builtin.command:
+        argv:
+          - aws
+          - secretsmanager
+          - describe-secret
+          - --secret-id
+          - dev/monitoring/alertmanager/zoho-smtp-password
+          - --region
+          - "{{ aws_region }}"
+          - --profile
+          - "{{ aws_profile }}"
+      register: alertmanager_secret_preserved
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: Verify Prometheus Grafana Cloud secret is preserved
+      ansible.builtin.command:
+        argv:
+          - aws
+          - secretsmanager
+          - describe-secret
+          - --secret-id
+          - dev/monitoring/prometheus/grafana-cloud-token
+          - --region
+          - "{{ aws_region }}"
+          - --profile
+          - "{{ aws_profile }}"
+      register: prometheus_secret_preserved
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    # --------------------------------------------------------
+    # Final assertions.
+    # --------------------------------------------------------
+
+    - name: Validate project shutdown
+      ansible.builtin.assert:
+        that:
+          - final_eks_status.stdout | trim == "ACTIVE"
+          - ready_node_count.stdout | int > 0
+
+          - remaining_monitoring_pods.stdout | trim == ""
+          - final_python_pods.stdout | trim == ""
+
+          - final_argocd_apps.results
+            | selectattr('rc', 'equalto', 0)
+            | list
+            | length == 0
+
+          - grafana_secret_preserved.rc == 0
+          - alertmanager_secret_preserved.rc == 0
+          - prometheus_secret_preserved.rc == 0
+
+        fail_msg: >-
+          Project shutdown completed with validation warnings.
+          Review the remaining resources before considering
+          the project fully OFF.
+
+        success_msg: >-
+          Project runtime has been removed successfully and
+          the shared AWS lab remains available.
+
+    # ========================================================
+    # 8. FINAL STATUS
+    # ========================================================
+
+    - name: Project shutdown completed
+      ansible.builtin.debug:
+        msg:
+          - "============================================================"
+          - " PROJECT OFF"
+          - "============================================================"
+          - ""
+          - "REMOVED:"
+          - "  - Python GitOps workloads"
+          - "  - Monitoring workloads"
+          - "  - Project Ingresses"
+          - "  - Project Argo CD Applications"
+          - "  - Grafana Pod Identity"
+          - "  - Alertmanager Pod Identity"
+          - "  - Prometheus Pod Identity"
+          - ""
+          - "SHARED LAB: ON"
+          - "  - EKS status: {{ final_eks_status.stdout | trim }}"
+          - "  - Ready worker nodes: {{ ready_node_count.stdout | trim }}"
+          - ""
+          - "PRESERVED:"
+          - "  - VPC / NAT"
+          - "  - EKS / worker nodes"
+          - "  - Shared EKS add-ons"
+          - "  - Argo CD installation"
+          - "  - Monitoring KMS key"
+          - "  - Grafana admin password"
+          - "  - Alertmanager Zoho SMTP password"
+          - "  - Prometheus Grafana Cloud token"
+          - "  - Terraform remote state"
+          - ""
+          - "Existing secrets will be reused by project-up."
+          - "============================================================"

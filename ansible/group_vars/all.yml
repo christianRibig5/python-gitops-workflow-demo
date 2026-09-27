@@ -10,7 +10,12 @@
 
 project_name: python-gitops-workflow-demo
 
-# Resolve repository root from the location of this variables file.
+# Repository root.
+#
+# project-up.yml and project-down.yml live under:
+#   ansible/playbooks/
+#
+# Therefore ../.. resolves to the repository root.
 project_root: "{{ playbook_dir }}/../.."
 
 # ------------------------------------------------------------
@@ -21,6 +26,9 @@ aws_region: ca-central-1
 aws_profile: dev-admin
 
 # Shared EKS cluster created by the reusable aws-lab.
+#
+# The project lifecycle consumes this cluster but does not
+# create or destroy it.
 eks_cluster_name: retail-dev-eksjalexsol
 
 # ------------------------------------------------------------
@@ -50,24 +58,70 @@ argocd_application_manifest: "{{ project_root }}/argocd/application.yaml"
 # IMPORTANT:
 # Order matters because later components consume resources
 # created by earlier components.
+#
+# project-up:
+#   Processes this list from top to bottom.
+#
+# project-down:
+#   Destroys ONLY ephemeral Pod Identity components.
+#
+# KMS and Secrets Manager resources are intentionally
+# preserved during project-down so existing credentials can
+# be reused when the project comes back up.
 # ------------------------------------------------------------
 
 terraform_components:
-  # 1. Create the customer-managed KMS key first.
+  # ==========================================================
+  # 1. MONITORING KMS
+  #
+  # Customer-managed KMS key used to encrypt project
+  # monitoring secrets.
+  #
+  # Persistent across project-down/project-up cycles.
+  # ==========================================================
+
   - name: monitoring-kms
     path: "{{ project_root }}/terraform/monitoring-kms"
 
-  # 2. Create Secrets Manager containers encrypted by the KMS key.
+  # ==========================================================
+  # 2. SECRETS MANAGER
+  #
+  # These resources depend on the monitoring KMS key.
+  #
+  # Terraform manages the secret containers only.
+  # Secret values are populated separately and are therefore
+  # not stored in Terraform state.
+  #
+  # Persistent across project-down/project-up cycles.
+  # ==========================================================
+
   - name: grafana-admin-secret
     path: "{{ project_root }}/terraform/grafana-admin-secret"
 
   - name: alertmanager-zoho-secret
     path: "{{ project_root }}/terraform/alertmanager-zoho-secret"
 
-  # 3. Create IAM roles/policies and EKS Pod Identity associations.
-  # These depend on the corresponding Secrets Manager resources.
+  - name: prometheus-grafana-cloud-secret
+    path: "{{ project_root }}/terraform/prometheus-grafana-cloud-secret"
+
+  # ==========================================================
+  # 3. EKS POD IDENTITY
+  #
+  # IAM roles, IAM policies and EKS Pod Identity associations.
+  #
+  # These are disposable project runtime infrastructure:
+  #
+  #   project-up   -> creates/reconciles them
+  #   project-down -> destroys them
+  #
+  # Existing Secrets Manager values remain untouched.
+  # ==========================================================
+
   - name: grafana-pod-identity
     path: "{{ project_root }}/terraform/pod-identity-associations/grafana-pod-identity-association"
 
   - name: alertmanager-pod-identity
     path: "{{ project_root }}/terraform/pod-identity-associations/alertmanager-pod-identity-association"
+
+  - name: prometheus-pod-identity
+    path: "{{ project_root }}/terraform/pod-identity-associations/prometheus-pod-identity-association"

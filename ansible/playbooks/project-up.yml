@@ -3,15 +3,47 @@
 # Python GitOps Workflow Demo - Project Up
 #
 # Purpose:
-# Orchestrate project-specific infrastructure and workloads
-# on top of the reusable shared AWS lab.
+# Bring up ONLY the Python GitOps project on top of the
+# reusable shared AWS lab.
 #
-# Deployment order:
+# The shared platform must already exist:
+#   - VPC / NAT
+#   - EKS cluster
+#   - Worker nodes
+#   - Shared EKS add-ons
+#   - EBS CSI
+#   - Secrets Store CSI
+#   - AWS Secrets and Configuration Provider (ASCP)
+#   - AWS Load Balancer Controller
+#
+# Project deployment order:
+#
 #   1. Preflight
 #   2. Kubeconfig
 #   3. Project Terraform
+#        - Monitoring KMS
+#        - Grafana admin secret
+#        - Alertmanager Zoho secret
+#        - Prometheus Grafana Cloud secret
+#        - Grafana Pod Identity
+#        - Alertmanager Pod Identity
+#        - Prometheus Pod Identity
 #   4. Argo CD
-#   5. Monitoring / GitOps workloads
+#        - Monitoring application
+#        - Python GitOps application
+#
+# Lifecycle:
+#
+#   project-up.yml
+#       -> starts project resources
+#
+#   project-down.yml
+#       -> removes project runtime resources
+#       -> preserves shared lab
+#       -> preserves KMS / Secrets Manager values
+#
+# Existing secret values are therefore reused across
+# project-down -> project-up cycles.
 # ============================================================
 
 - name: Python GitOps Project - Bring Up
@@ -29,26 +61,67 @@
   # Project orchestration
   # ----------------------------------------------------------
   roles:
-    # Step 1: Validate local tools, AWS authentication,
-    # and shared EKS availability.
+    # ========================================================
+    # STEP 1 - PREFLIGHT
+    #
+    # Validate:
+    #   - Required local tools
+    #   - AWS authentication
+    #   - Shared EKS cluster availability
+    #
+    # project-up does NOT create the shared AWS platform.
+    # ========================================================
     - role: preflight
       tags:
         - preflight
 
-    # Step 2: Configure kubectl for the shared EKS cluster
-    # and verify Kubernetes API connectivity.
+    # ========================================================
+    # STEP 2 - KUBECONFIG
+    #
+    # Configure kubectl for the shared EKS cluster and verify
+    # Kubernetes API connectivity.
+    # ========================================================
     - role: kubeconfig
       tags:
         - kubeconfig
 
-    # Step 3: Provision project-specific AWS infrastructure
-    # in dependency order using Terraform.
+    # ========================================================
+    # STEP 3 - PROJECT TERRAFORM
+    #
+    # Provision/reconcile project-specific AWS resources in
+    # dependency order.
+    #
+    # Terraform is idempotent:
+    #
+    # Existing KMS / Secrets Manager resources are preserved
+    # and should result in no destructive changes.
+    #
+    # Pod Identity resources removed by project-down are
+    # recreated here.
+    #
+    # The exact component order is defined centrally in:
+    #
+    #   group_vars/all.yml
+    #
+    # ========================================================
     - role: terraform
       tags:
         - terraform
 
-    # Step 4: Install and configure Argo CD,
-    # then register the project's GitOps applications.
+    # ========================================================
+    # STEP 4 - ARGO CD / GITOPS
+    #
+    # Ensure Argo CD is available and register the project
+    # applications.
+    #
+    # Argo CD then reconciles:
+    #
+    #   - Monitoring stack
+    #   - Python application
+    #
+    # This recreates Kubernetes runtime resources removed by
+    # project-down.
+    # ========================================================
     - role: argocd
       tags:
         - argocd
